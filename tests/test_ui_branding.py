@@ -135,6 +135,11 @@ def _disconnected_window(monkeypatch):
     return main_window.MainWindow()
 
 
+def _use_gif_mode(window) -> None:
+    window._profiles.active_profile_id = "gif"
+    window._apply_profile_ui()
+
+
 def test_no_provider_dialog_explains_local_media_remains_available(monkeypatch) -> None:
     monkeypatch.delenv("NAUTIBOY_GIPHY_API_KEY", raising=False)
     dialog = GifSearchDialog(GiphyProvider())
@@ -148,6 +153,7 @@ def test_no_provider_dialog_explains_local_media_remains_available(monkeypatch) 
 
 def test_local_gif_populates_animated_preview_without_hid(monkeypatch, tmp_path: Path) -> None:
     window = _disconnected_window(monkeypatch)
+    _use_gif_mode(window)
     sent = []
     window.send_requested.connect(sent.append)
     window.gif_frame_requested.connect(lambda *args: sent.append(args))
@@ -167,6 +173,7 @@ def test_local_gif_populates_animated_preview_without_hid(monkeypatch, tmp_path:
 
 def test_online_selection_populates_preview_but_never_auto_sends(monkeypatch) -> None:
     window = _disconnected_window(monkeypatch)
+    _use_gif_mode(window)
     sent = []
     window.send_requested.connect(sent.append)
     window.gif_frame_requested.connect(lambda *args: sent.append(args))
@@ -197,6 +204,7 @@ def test_restore_stops_both_schedulers_before_request(monkeypatch) -> None:
 
 def test_provider_failure_does_not_break_later_local_media(monkeypatch, tmp_path: Path) -> None:
     window = _disconnected_window(monkeypatch)
+    _use_gif_mode(window)
     path = tmp_path / "local.gif"
     path.write_bytes(_animated_gif())
     try:
@@ -210,6 +218,7 @@ def test_provider_failure_does_not_break_later_local_media(monkeypatch, tmp_path
 
 def test_send_is_explicit_animation_transition(monkeypatch) -> None:
     window = _disconnected_window(monkeypatch)
+    _use_gif_mode(window)
     starts = []
     try:
         window._online_gif_selected(_animated_gif(), "Ready but not sent")
@@ -225,6 +234,7 @@ def test_send_is_explicit_animation_transition(monkeypatch) -> None:
 
 def test_new_preview_does_not_replace_active_lcd_snapshot(monkeypatch) -> None:
     window = _disconnected_window(monkeypatch)
+    _use_gif_mode(window)
     try:
         window._online_gif_selected(_animated_gif(), "First")
         active = window._selected_media.gif
@@ -370,6 +380,7 @@ def test_local_media_does_not_depend_on_credential_store(monkeypatch, tmp_path: 
             raise AssertionError("local media attempted credential access")
 
     window = _disconnected_window(monkeypatch)
+    _use_gif_mode(window)
     path = tmp_path / "local.gif"
     path.write_bytes(_animated_gif())
     try:

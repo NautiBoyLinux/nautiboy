@@ -26,6 +26,7 @@ by, or supported by Corsair.
 - KDE/Linux system tray with background playback, Restore, and safe Quit
 - Per-user single-instance activation through a Qt local socket
 - Optional per-user XDG login startup, hidden to tray by default
+- Four persistent functional modes and four renameable Creative sub-presets
 - Normal-user operation through a narrowly scoped `uaccess` rule
 
 ## Hardware support
@@ -103,7 +104,7 @@ remove only its user entry:
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/io.github.nautiboy.nautiboy.desktop"
 ```
 
-NautiBoy does not install a service, write controller profiles, or place
+NautiBoy does not install a service, write controller-side profiles, or place
 content in the LCD's persistent storage.
 
 ## Known limitations
@@ -114,7 +115,7 @@ content in the LCD's persistent storage.
   without it
 - No CPU/GPU monitoring screens
 - NautiBoy must remain running to maintain volatile software display
-- No reusable media profiles
+- Functional profiles do not yet persist selected media paths or content
 - No persistent controller storage access
 - No brightness, rotation, or frame-rate controls
 - No pump, fan, RGB, or firmware operations

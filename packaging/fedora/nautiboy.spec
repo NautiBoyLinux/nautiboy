@@ -2,7 +2,7 @@
 
 Name:           nautiboy
 Version:        0.2.0~dev0
-Release:        5%{?dist}
+Release:        7%{?dist}
 Summary:        Linux controller for Corsair NAUTILUS RS LCD displays
 
 License:        GPL-3.0-or-later
@@ -66,6 +66,12 @@ appstreamcli validate --no-net packaging/io.github.nautiboy.nautiboy.metainfo.xm
 %{_udevrulesdir}/70-nautilus-lcd.rules
 
 %changelog
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-7
+- Add persistent renameable Creative presets for installed UI validation
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-6
+- Add the v0.3 functional profile framework for installed UI validation
+
 * Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-5
 - Finalize secure GIPHY credentials and Preferences sizing validation
 

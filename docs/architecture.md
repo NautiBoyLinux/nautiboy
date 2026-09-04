@@ -9,14 +9,17 @@
 3. `imaging` decodes JPEG/PNG input and returns a bounded 480×480 baseline JPEG.
 4. `gif` validates GIFs, renders one composed frame at a time through the same
    image pipeline, and schedules LCD frames without a backlog.
-5. `providers` exposes provider-neutral results. The experimental GIPHY adapter
-   is optional and reads only an environment variable.
-6. `network` performs bounded, cancellable Qt Network requests in a separate
+5. `profiles` models four versioned functional modes and persists their UI-only
+   state in an atomic per-user XDG JSON document.
+6. `providers` exposes provider-neutral results. The experimental GIPHY adapter
+   is optional and resolves its credential from the process environment or
+   desktop keyring.
+7. `network` performs bounded, cancellable Qt Network requests in a separate
    thread.
-7. `backends` owns direct hidraw access and revalidates device identity before
+8. `backends` owns direct hidraw access and revalidates device identity before
    every open.
-8. `application` and `models` define state-dependent control policy.
-9. `gui` presents state and uses timers with in-flight guards. The
+9. `application` and `models` define state-dependent control policy.
+10. `gui` presents state and uses timers with in-flight guards. The
    timer only queues work; every USB operation runs in `DeviceWorker` on its
    dedicated `QThread`.
 
@@ -46,6 +49,15 @@ obsolete deadlines are coalesced to the current frame instead of queued. A
 long-held frame is retransmitted at the existing 1,000 ms keepalive interval.
 The selected preview and active LCD media are separate snapshots: selecting new
 media never changes the LCD until Send is pressed.
+
+The four fixed profile modes are Thermals, Image, GIF, and Creative. Profile
+selection and Image/GIF resize strategies persist in
+`$XDG_CONFIG_HOME/nautiboy/profiles.json`. Switching modes changes UI state
+only: it does not emit a device operation, stop active playback, or alter the
+LCD. Thermals and Creative are schema/UI foundations without telemetry or
+compositing in this phase. Creative contains four stable, independently stored
+sub-presets; their active selection and renameable display names persist while
+their background and telemetry-overlay namespaces reserve future editor state.
 
 Online search is not a prerequisite for local media. GIPHY downloads live only
 for the current session because standard GIPHY integrations may not persistently

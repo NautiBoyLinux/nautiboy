@@ -9,10 +9,37 @@ QWidget {
 QMainWindow, QWidget#centralWidget {
     background-color: #080a13;
 }
-QFrame#headerFrame, QFrame#contentCard, QFrame#deviceCard, QFrame#detailsCard {
+QFrame#headerFrame, QFrame#profileBar, QFrame#contentCard, QFrame#deviceCard, QFrame#detailsCard {
     background-color: #111522;
     border: 1px solid #262c43;
     border-radius: 14px;
+}
+QPushButton#profileButton {
+    min-height: 36px;
+    padding: 0 12px;
+}
+QPushButton#profileButton:checked {
+    color: white;
+    background-color: #7427e8;
+    border-color: #ad54ff;
+    font-weight: 700;
+}
+QLabel#modePlaceholder {
+    color: #aeb5d2;
+    padding: 24px;
+}
+QLabel#presetsHeading {
+    color: #eef0ff;
+    font-size: 16px;
+    font-weight: 700;
+}
+QPushButton#renamePresetButton {
+    min-height: 32px;
+    padding: 0 14px;
+    color: #b7bdd5;
+    background: transparent;
+    border: 1px solid #303651;
+    border-radius: 9px;
 }
 QLabel#brandTitle {
     color: #f5f3ff;

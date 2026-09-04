@@ -8,10 +8,12 @@ from pathlib import Path
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, QThread, QTimer, Qt, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QMovie, QPixmap
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -31,6 +33,13 @@ from nautiboy.gif.playback import GifPlaybackController
 from nautiboy.media import PreparedMedia, prepare_downloaded_gif, prepare_local_media
 from nautiboy.models import BUSY_STATES, AppState
 from nautiboy.providers.giphy import GiphyProvider
+from nautiboy.profiles import (
+    CREATIVE_PRESET_IDS,
+    CREATIVE_PRESET_NAME_MAX_LENGTH,
+    ProfileStore,
+    ProfileStoreError,
+    ProfileType,
+)
 
 from .gif_search_dialog import GifSearchDialog
 from .preferences_dialog import PreferencesDialog
@@ -52,7 +61,7 @@ class MainWindow(QMainWindow):
     tray_status_changed = Signal(str)
     shutdown_ready = Signal()
 
-    def __init__(self) -> None:
+    def __init__(self, *, profile_store: ProfileStore | None = None) -> None:
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.resize(760, 680)
@@ -74,6 +83,8 @@ class MainWindow(QMainWindow):
         self._workers_stopped = False
         self._search_dialog: GifSearchDialog | None = None
         self._initial_send_jpeg: bytes | None = None
+        self._profile_store = profile_store or ProfileStore()
+        self._profiles = self._profile_store.load()
 
         self._build_ui()
         self._refresher = StaticImageRefresher(self)
@@ -152,6 +163,25 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(self.details_button)
         layout.addWidget(header)
 
+        profile_bar = QFrame()
+        profile_bar.setObjectName("profileBar")
+        profile_layout = QHBoxLayout(profile_bar)
+        profile_layout.setContentsMargins(8, 8, 8, 8)
+        profile_layout.setSpacing(8)
+        self.profile_group = QButtonGroup(self)
+        self.profile_group.setExclusive(True)
+        self.profile_buttons: dict[str, QPushButton] = {}
+        for profile in self._profiles.profiles:
+            button = QPushButton(profile.name)
+            button.setObjectName("profileButton")
+            button.setCheckable(True)
+            self.profile_group.addButton(button)
+            self.profile_group.setId(button, list(ProfileType).index(profile.profile_type))
+            self.profile_buttons[profile.identifier] = button
+            profile_layout.addWidget(button, 1)
+        self.profile_group.idClicked.connect(self._profile_clicked)
+        layout.addWidget(profile_bar)
+
         content = QHBoxLayout()
         content.setSpacing(14)
         preview_card = QFrame()
@@ -187,9 +217,52 @@ class MainWindow(QMainWindow):
         self.send_button.setObjectName("sendButton")
         self.restore_button = QPushButton("Restore Hardware Mode")
         self.restore_button.setObjectName("restoreButton")
+        self.mode_placeholder = QLabel()
+        self.mode_placeholder.setObjectName("modePlaceholder")
+        self.mode_placeholder.setWordWrap(True)
+        self.mode_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.creative_panel = QWidget()
+        creative_layout = QVBoxLayout(self.creative_panel)
+        creative_layout.setContentsMargins(0, 0, 0, 0)
+        creative_layout.setSpacing(10)
+        presets_heading = QLabel("Presets")
+        presets_heading.setObjectName("presetsHeading")
+        presets_heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        creative_layout.addWidget(presets_heading)
+        preset_bar = QFrame()
+        preset_bar.setObjectName("profileBar")
+        preset_layout = QHBoxLayout(preset_bar)
+        preset_layout.setContentsMargins(8, 8, 8, 8)
+        preset_layout.setSpacing(8)
+        self.creative_preset_group = QButtonGroup(self)
+        self.creative_preset_group.setExclusive(True)
+        self.creative_preset_buttons: dict[str, QPushButton] = {}
+        for index, identifier in enumerate(CREATIVE_PRESET_IDS):
+            button = QPushButton()
+            button.setObjectName("profileButton")
+            button.setCheckable(True)
+            self.creative_preset_group.addButton(button, index)
+            self.creative_preset_buttons[identifier] = button
+            preset_layout.addWidget(button, 1)
+        self.creative_preset_group.idClicked.connect(self._creative_preset_clicked)
+        creative_layout.addWidget(preset_bar)
+        self.rename_preset_button = QPushButton("Rename Selected Preset")
+        self.rename_preset_button.setObjectName("renamePresetButton")
+        creative_layout.addWidget(
+            self.rename_preset_button, alignment=Qt.AlignmentFlag.AlignHCenter
+        )
+        self.creative_placeholder = QLabel(
+            "Creative editing will support background media, telemetry overlays, and custom layouts."
+        )
+        self.creative_placeholder.setObjectName("modePlaceholder")
+        self.creative_placeholder.setWordWrap(True)
+        self.creative_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        creative_layout.addWidget(self.creative_placeholder, 1)
         actions.addLayout(select_row)
         actions.addWidget(self.mode_combo)
         actions.addWidget(self.send_button)
+        actions.addWidget(self.mode_placeholder, 1)
+        actions.addWidget(self.creative_panel, 1)
         actions.addWidget(self.restore_button)
         actions.addStretch()
         content.addLayout(actions, 1)
@@ -254,7 +327,110 @@ class MainWindow(QMainWindow):
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
         self.send_button.clicked.connect(self._send)
         self.restore_button.clicked.connect(self._restore)
+        self.rename_preset_button.clicked.connect(self._rename_creative_preset)
         self.details_button.toggled.connect(self._toggle_details)
+        self._apply_profile_ui()
+
+    @Slot(int)
+    def _profile_clicked(self, index: int) -> None:
+        self._switch_profile(list(ProfileType)[index].value)
+
+    def _switch_profile(self, identifier: str) -> None:
+        if identifier == self._profiles.active_profile_id:
+            return
+        self._profiles.active_profile_id = identifier
+        try:
+            self._profile_store.save(self._profiles)
+        except ProfileStoreError as error:
+            self._message(str(error))
+        self._clear_selected_media()
+        self._apply_profile_ui()
+
+    @Slot(int)
+    def _creative_preset_clicked(self, index: int) -> None:
+        identifier = CREATIVE_PRESET_IDS[index]
+        settings = self._profiles.profile(ProfileType.CREATIVE.value).settings
+        if settings["active_preset_id"] == identifier:
+            return
+        try:
+            self._profile_store.set_active_creative_preset(self._profiles, identifier)
+        except ProfileStoreError as error:
+            self._message(str(error))
+        self._apply_creative_preset_ui()
+
+    @Slot()
+    def _rename_creative_preset(self) -> None:
+        settings = self._profiles.profile(ProfileType.CREATIVE.value).settings
+        identifier = settings["active_preset_id"]
+        preset = next(item for item in settings["presets"] if item["id"] == identifier)
+        name, accepted = QInputDialog.getText(
+            self,
+            "Rename Creative Preset",
+            f"Preset name (maximum {CREATIVE_PRESET_NAME_MAX_LENGTH} characters):",
+            text=preset["name"],
+        )
+        if not accepted:
+            return
+        try:
+            self._profile_store.rename_creative_preset(self._profiles, identifier, name)
+        except ValueError as error:
+            QMessageBox.warning(self, "Invalid Preset Name", str(error))
+            return
+        except ProfileStoreError as error:
+            self._message(str(error))
+            return
+        self._apply_creative_preset_ui()
+
+    def _apply_creative_preset_ui(self) -> None:
+        settings = self._profiles.profile(ProfileType.CREATIVE.value).settings
+        active = settings["active_preset_id"]
+        presets = {preset["id"]: preset for preset in settings["presets"]}
+        for identifier, button in self.creative_preset_buttons.items():
+            name = presets[identifier]["name"]
+            button.setText(button.fontMetrics().elidedText(name, Qt.TextElideMode.ElideRight, 76))
+            button.setToolTip(name)
+            button.setChecked(identifier == active)
+
+    def _clear_selected_media(self) -> None:
+        self._selected_path = None
+        self._online_gif_data = None
+        self._selected_media = None
+        self._prepared_jpeg = None
+        self._stop_preview()
+        self.preview.clear()
+        self.preview.setText("Select media for this mode")
+        self.preview_caption.setText("PREVIEW  •  480 × 480")
+
+    def _apply_profile_ui(self) -> None:
+        active = ProfileType(self._profiles.active_profile_id)
+        for identifier, button in self.profile_buttons.items():
+            button.setChecked(identifier == active.value)
+        media_mode = active in {ProfileType.IMAGE, ProfileType.GIF}
+        gif_mode = active is ProfileType.GIF
+        self.select_button.setVisible(media_mode)
+        self.gif_search_button.setVisible(gif_mode)
+        self.mode_combo.setVisible(media_mode)
+        self.send_button.setVisible(media_mode)
+        creative_mode = active is ProfileType.CREATIVE
+        self.mode_placeholder.setVisible(active is ProfileType.THERMALS)
+        self.creative_panel.setVisible(creative_mode)
+        if active is ProfileType.IMAGE:
+            self.select_button.setText("Select Image")
+        elif active is ProfileType.GIF:
+            self.select_button.setText("Select GIF")
+        elif active is ProfileType.THERMALS:
+            self.mode_placeholder.setText(
+                "Thermals mode is ready for future CPU/GPU telemetry. No sensor polling is enabled yet."
+            )
+        if creative_mode:
+            self._apply_creative_preset_ui()
+        if media_mode:
+            strategy = self._profiles.profile(active.value).settings["resize_strategy"]
+            combo_index = self.mode_combo.findData(strategy)
+            self.mode_combo.blockSignals(True)
+            self.mode_combo.setCurrentIndex(combo_index)
+            self.mode_combo.blockSignals(False)
+        self._set_state(self._state)
 
     @Slot(bool)
     def _toggle_details(self, visible: bool) -> None:
@@ -367,8 +543,16 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _select_image(self) -> None:
+        active = ProfileType(self._profiles.active_profile_id)
+        if active not in {ProfileType.IMAGE, ProfileType.GIF}:
+            return
+        media_filter = (
+            "Images (*.jpg *.jpeg *.png)"
+            if active is ProfileType.IMAGE
+            else "GIF animation (*.gif)"
+        )
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Select local media", str(Path.home()), "Media (*.jpg *.jpeg *.png *.gif)"
+            self, "Select local media", str(Path.home()), media_filter
         )
         if filename:
             self._selected_path = Path(filename)
@@ -377,6 +561,14 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _mode_changed(self) -> None:
+        active = ProfileType(self._profiles.active_profile_id)
+        if active in {ProfileType.IMAGE, ProfileType.GIF}:
+            try:
+                self._profile_store.set_resize_strategy(
+                    self._profiles, active.value, str(self.mode_combo.currentData())
+                )
+            except (ProfileStoreError, ValueError) as error:
+                self._message(str(error))
         if self._selected_path is not None:
             self._prepare_selected()
         elif self._online_gif_data is not None and self._selected_media is not None:
@@ -393,6 +585,18 @@ class MainWindow(QMainWindow):
 
     def _prepare_selected(self) -> None:
         assert self._selected_path is not None
+        active = ProfileType(self._profiles.active_profile_id)
+        is_gif = self._selected_path.suffix.lower() == ".gif"
+        if (active is ProfileType.IMAGE and is_gif) or (
+            active is ProfileType.GIF and not is_gif
+        ):
+            expected = "JPEG or PNG" if active is ProfileType.IMAGE else "GIF"
+            self._prepared_jpeg = None
+            self._selected_media = None
+            self.preview.setText(f"Select a {expected} file")
+            self._message(f"{active.value.capitalize()} mode accepts {expected} files only")
+            self._set_state(state_after_image_error(has_device=self._identity is not None))
+            return
         strategy = self.mode_combo.currentData()
         try:
             media = prepare_local_media(self._selected_path, strategy)
@@ -456,6 +660,9 @@ class MainWindow(QMainWindow):
 
     @Slot(bytes, str)
     def _online_gif_selected(self, data: bytes, title: str) -> None:
+        if self._profiles.active_profile_id != ProfileType.GIF.value:
+            self._message("Online GIF selection is available only in GIF mode")
+            return
         try:
             media = prepare_downloaded_gif(data, title, self.mode_combo.currentData())
         except ImageProcessingError as error:
