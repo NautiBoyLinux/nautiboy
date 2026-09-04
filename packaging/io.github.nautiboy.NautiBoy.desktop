@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=NautiBoy
+GenericName=Nautilus LCD Controller
+Comment=Control Corsair NAUTILUS RS LCD displays on Linux
+Exec=nautiboy
+Icon=io.github.nautiboy.NautiBoy
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=Corsair;Nautilus;LCD;cooler;
+StartupNotify=true
+StartupWMClass=NautiBoy

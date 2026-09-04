@@ -1,0 +1,2 @@
+# Corsair Nautilus LCD Cap — active local desktop user only
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1b1c", ATTRS{idProduct}=="0c57", TAG+="uaccess"
