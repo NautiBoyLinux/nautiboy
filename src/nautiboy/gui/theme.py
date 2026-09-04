@@ -33,6 +33,47 @@ QLabel#presetsHeading {
     font-size: 16px;
     font-weight: 700;
 }
+QLabel#telemetryTitle {
+    color: #eef0ff;
+    font-size: 15px;
+    font-weight: 700;
+}
+QLabel#telemetryCount, QLabel#telemetryValue {
+    color: #aeb5d2;
+}
+QScrollArea#telemetryScroll, QScrollArea#telemetryScroll > QWidget > QWidget {
+    background: transparent;
+}
+QGroupBox#telemetryDeviceGroup {
+    margin-top: 10px;
+    padding-top: 8px;
+    border: 1px solid #303651;
+    border-radius: 10px;
+    color: #d9b2ff;
+    font-weight: 700;
+}
+QGroupBox#telemetryDeviceGroup::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 5px;
+}
+QFrame#telemetrySensorRow {
+    background-color: #111522;
+    border: 1px solid #262c43;
+    border-radius: 8px;
+}
+QLineEdit {
+    min-height: 32px;
+    padding: 0 9px;
+    color: #eef0ff;
+    background-color: #090c15;
+    border: 1px solid #303651;
+    border-radius: 8px;
+}
+QPushButton#telemetryColorButton {
+    min-height: 32px;
+    padding: 0 10px;
+}
 QPushButton#renamePresetButton {
     min-height: 32px;
     padding: 0 14px;

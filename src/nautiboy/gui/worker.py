@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from nautiboy.backends.direct_hidraw import DirectNautilusBackend
 from nautiboy.device.identity import DeviceIdentity
+from nautiboy.telemetry.orbit import OrbitTransferStats, encode_orbit_jpeg, render_orbit
 
 
 class DeviceWorker(QObject):
@@ -16,6 +17,7 @@ class DeviceWorker(QObject):
     image_sent = Signal(int)
     image_refreshed = Signal(int)
     gif_frame_sent = Signal(int, int, float)
+    orbit_frame_sent = Signal(object)
     restored = Signal()
     failed = Signal(str, str)
 
@@ -63,6 +65,29 @@ class DeviceWorker(QObject):
             self.gif_frame_sent.emit(index, reports, time.monotonic() - started)
         except Exception as error:  # boundary: decode/HID failure stops scheduling
             self.failed.emit("animation", str(error))
+
+    @Slot(object)
+    def send_orbit_frame(self, frame: object) -> None:
+        try:
+            started = time.monotonic()
+            rendered = render_orbit(frame)
+            rendered_at = time.monotonic()
+            jpeg = encode_orbit_jpeg(rendered)
+            encoded_at = time.monotonic()
+            reports = self._required_backend().send_static_image(jpeg)
+            finished = time.monotonic()
+            self.orbit_frame_sent.emit(
+                OrbitTransferStats(
+                    report_count=reports,
+                    jpeg_bytes=len(jpeg),
+                    render_seconds=rendered_at - started,
+                    encode_seconds=encoded_at - rendered_at,
+                    transfer_seconds=finished - encoded_at,
+                    total_seconds=finished - started,
+                )
+            )
+        except Exception as error:
+            self.failed.emit("thermals", str(error))
 
     @Slot()
     def restore(self) -> None:

@@ -4,21 +4,27 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import time
 
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, QThread, QTimer, Qt, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QMovie, QPixmap
+from PySide6.QtGui import QCloseEvent, QColor, QMovie, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
+    QColorDialog,
     QComboBox,
     QFileDialog,
     QFrame,
+    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -40,8 +46,21 @@ from nautiboy.profiles import (
     ProfileStoreError,
     ProfileType,
 )
+from nautiboy.telemetry import (
+    LinuxHwmonProvider,
+    MAX_SELECTED_SENSORS,
+    OrbitFrame,
+    OrbitItem,
+    TelemetryPoller,
+    TelemetryPresentationError,
+    TelemetryPresentationStore,
+    TelemetrySnapshot,
+)
+from nautiboy.telemetry.orbit import OrbitTransferStats, phase_at, render_orbit_jpeg
+from nautiboy.telemetry.providers.base import TelemetryProvider
 
 from .gif_search_dialog import GifSearchDialog
+from .orbit import ORBIT_PREVIEW_INTERVAL_MS, OrbitPlaybackController
 from .preferences_dialog import PreferencesDialog
 from .refresh import StaticImageRefresher
 from .worker import DeviceWorker
@@ -56,12 +75,20 @@ class MainWindow(QMainWindow):
     refresh_requested = Signal(bytes)
     restore_requested = Signal()
     gif_frame_requested = Signal(object, int, str)
+    orbit_frame_requested = Signal(object)
     rescan_requested = Signal()
     hidden_to_tray = Signal()
     tray_status_changed = Signal(str)
     shutdown_ready = Signal()
+    telemetry_snapshot_ready = Signal(object)
 
-    def __init__(self, *, profile_store: ProfileStore | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        profile_store: ProfileStore | None = None,
+        telemetry_provider: TelemetryProvider | None = None,
+        telemetry_store: TelemetryPresentationStore | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.resize(760, 680)
@@ -85,6 +112,16 @@ class MainWindow(QMainWindow):
         self._initial_send_jpeg: bytes | None = None
         self._profile_store = profile_store or ProfileStore()
         self._profiles = self._profile_store.load()
+        self._telemetry_store = telemetry_store or TelemetryPresentationStore()
+        self._telemetry_presentations = self._telemetry_store.load()
+        self._telemetry_snapshot: TelemetrySnapshot | None = None
+        self._telemetry_signature: tuple[tuple[str, tuple[str, ...]], ...] = ()
+        self._telemetry_widgets: dict[str, dict[str, QWidget]] = {}
+        self._orbit_preview_started = time.monotonic()
+        self._orbit_playback = OrbitPlaybackController(self)
+        self._orbit_measurements: list[OrbitTransferStats] = []
+        self._orbit_measurement_started = 0.0
+        self._orbit_playback.frame_requested.connect(self._queue_orbit_frame)
 
         self._build_ui()
         self._refresher = StaticImageRefresher(self)
@@ -100,11 +137,13 @@ class MainWindow(QMainWindow):
         self.refresh_requested.connect(self._worker.refresh_image)
         self.restore_requested.connect(self._worker.restore)
         self.gif_frame_requested.connect(self._worker.send_gif_frame)
+        self.orbit_frame_requested.connect(self._worker.send_orbit_frame)
         self._worker.configured.connect(self._backend_configured)
         self._worker.firmware_ready.connect(self._firmware_ready)
         self._worker.image_sent.connect(self._image_sent)
         self._worker.image_refreshed.connect(self._image_refreshed)
         self._worker.gif_frame_sent.connect(self._gif_frame_sent)
+        self._worker.orbit_frame_sent.connect(self._orbit_frame_sent)
         self._worker.restored.connect(self._restored)
         self._worker.failed.connect(self._operation_failed)
         self._thread.start()
@@ -121,6 +160,16 @@ class MainWindow(QMainWindow):
             self._poll_timer.timeout.connect(self._rescan)
             self._poll_timer.start()
         self._rescan()
+        self.telemetry_snapshot_ready.connect(self._apply_telemetry_snapshot)
+        self._telemetry_provider = telemetry_provider or LinuxHwmonProvider()
+        self._telemetry_poller = TelemetryPoller(
+            [self._telemetry_provider], self.telemetry_snapshot_ready.emit
+        )
+        self._telemetry_poller.start()
+        self._orbit_preview_timer = QTimer(self)
+        self._orbit_preview_timer.setInterval(ORBIT_PREVIEW_INTERVAL_MS)
+        self._orbit_preview_timer.timeout.connect(self._render_orbit_preview)
+        self._orbit_preview_timer.start()
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -221,6 +270,33 @@ class MainWindow(QMainWindow):
         self.mode_placeholder.setObjectName("modePlaceholder")
         self.mode_placeholder.setWordWrap(True)
         self.mode_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.thermals_panel = QWidget()
+        thermals_layout = QVBoxLayout(self.thermals_panel)
+        thermals_layout.setContentsMargins(0, 0, 0, 0)
+        thermals_layout.setSpacing(8)
+        thermals_title = QLabel("Select up to 2 temperatures to display")
+        thermals_title.setObjectName("telemetryTitle")
+        thermals_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        thermals_layout.addWidget(thermals_title)
+        self.telemetry_count = QLabel("Selected: 0 / 2")
+        self.telemetry_count.setObjectName("telemetryCount")
+        self.telemetry_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        thermals_layout.addWidget(self.telemetry_count)
+        self.telemetry_scroll = QScrollArea()
+        self.telemetry_scroll.setObjectName("telemetryScroll")
+        self.telemetry_scroll.setWidgetResizable(True)
+        self.telemetry_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.telemetry_container = QWidget()
+        self.telemetry_groups_layout = QVBoxLayout(self.telemetry_container)
+        self.telemetry_groups_layout.setContentsMargins(0, 0, 0, 0)
+        self.telemetry_groups_layout.setSpacing(8)
+        self.telemetry_empty = QLabel("Discovering temperature sensors…")
+        self.telemetry_empty.setObjectName("modePlaceholder")
+        self.telemetry_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.telemetry_groups_layout.addWidget(self.telemetry_empty)
+        self.telemetry_groups_layout.addStretch()
+        self.telemetry_scroll.setWidget(self.telemetry_container)
+        thermals_layout.addWidget(self.telemetry_scroll, 1)
         self.creative_panel = QWidget()
         creative_layout = QVBoxLayout(self.creative_panel)
         creative_layout.setContentsMargins(0, 0, 0, 0)
@@ -262,6 +338,7 @@ class MainWindow(QMainWindow):
         actions.addWidget(self.mode_combo)
         actions.addWidget(self.send_button)
         actions.addWidget(self.mode_placeholder, 1)
+        actions.addWidget(self.thermals_panel, 1)
         actions.addWidget(self.creative_panel, 1)
         actions.addWidget(self.restore_button)
         actions.addStretch()
@@ -391,6 +468,228 @@ class MainWindow(QMainWindow):
             button.setToolTip(name)
             button.setChecked(identifier == active)
 
+    @Slot(object)
+    def _apply_telemetry_snapshot(self, snapshot: TelemetrySnapshot) -> None:
+        self._telemetry_snapshot = snapshot
+        signature = tuple(
+            (
+                device.device_id,
+                tuple(
+                    reading.sensor.sensor_id
+                    for reading in snapshot.readings
+                    if reading.sensor.device_id == device.device_id
+                ),
+            )
+            for device in snapshot.devices
+            if any(reading.sensor.device_id == device.device_id for reading in snapshot.readings)
+        )
+        for reading in snapshot.readings:
+            self._telemetry_store.ensure_sensor(
+                self._telemetry_presentations,
+                reading.sensor.sensor_id,
+                reading.sensor.default_label[:24],
+            )
+        if signature != self._telemetry_signature:
+            self._telemetry_signature = signature
+            self._rebuild_telemetry_groups()
+        self._update_telemetry_controls()
+        self._render_orbit_preview()
+
+    def _clear_layout(self, layout: QVBoxLayout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+            child = item.layout()
+            if child is not None:
+                self._clear_layout(child)  # type: ignore[arg-type]
+
+    def _rebuild_telemetry_groups(self) -> None:
+        self._clear_layout(self.telemetry_groups_layout)
+        self._telemetry_widgets.clear()
+        snapshot = self._telemetry_snapshot
+        if snapshot is None or not snapshot.readings:
+            self.telemetry_empty = QLabel("No readable temperature sensors found")
+            self.telemetry_empty.setObjectName("modePlaceholder")
+            self.telemetry_groups_layout.addWidget(self.telemetry_empty)
+            self.telemetry_groups_layout.addStretch()
+            return
+        for device in snapshot.devices:
+            readings = [
+                reading for reading in snapshot.readings if reading.sensor.device_id == device.device_id
+            ]
+            if not readings:
+                continue
+            group = QGroupBox(device.display_name)
+            group.setObjectName("telemetryDeviceGroup")
+            group_layout = QVBoxLayout(group)
+            group_layout.setSpacing(5)
+            for reading in readings:
+                sensor = reading.sensor
+                row = QFrame()
+                row.setObjectName("telemetrySensorRow")
+                row_layout = QVBoxLayout(row)
+                row_layout.setContentsMargins(7, 6, 7, 6)
+                row_layout.setSpacing(5)
+                top = QHBoxLayout()
+                select = QCheckBox(sensor.raw_label or sensor.default_label)
+                select.setToolTip(sensor.sensor_id)
+                value = QLabel()
+                value.setObjectName("telemetryValue")
+                top.addWidget(select)
+                top.addStretch()
+                top.addWidget(value)
+                row_layout.addLayout(top)
+                editor = QHBoxLayout()
+                label = QLineEdit()
+                label.setMaxLength(24)
+                label.setPlaceholderText("Display label")
+                color = QPushButton("Color")
+                color.setObjectName("telemetryColorButton")
+                editor.addWidget(label, 1)
+                editor.addWidget(color)
+                row_layout.addLayout(editor)
+                select.toggled.connect(
+                    lambda checked, sensor_id=sensor.sensor_id: self._telemetry_selection_changed(
+                        sensor_id, checked
+                    )
+                )
+                label.editingFinished.connect(
+                    lambda sensor_id=sensor.sensor_id, field=label: self._telemetry_label_changed(
+                        sensor_id, field
+                    )
+                )
+                color.clicked.connect(
+                    lambda _checked=False, sensor_id=sensor.sensor_id: self._telemetry_color_requested(
+                        sensor_id
+                    )
+                )
+                self._telemetry_widgets[sensor.sensor_id] = {
+                    "select": select,
+                    "value": value,
+                    "label": label,
+                    "color": color,
+                }
+                group_layout.addWidget(row)
+            self.telemetry_groups_layout.addWidget(group)
+        self.telemetry_groups_layout.addStretch()
+
+    def _update_telemetry_controls(self) -> None:
+        selected_count = len(self._telemetry_presentations.selected)
+        self.telemetry_count.setText(f"Selected: {selected_count} / {MAX_SELECTED_SENSORS}")
+        readings = {
+            reading.sensor.sensor_id: reading
+            for reading in (self._telemetry_snapshot.readings if self._telemetry_snapshot else ())
+        }
+        for sensor_id, widgets in self._telemetry_widgets.items():
+            presentation = self._telemetry_presentations.sensor(sensor_id)
+            checkbox = widgets["select"]
+            assert isinstance(checkbox, QCheckBox)
+            checkbox.blockSignals(True)
+            checkbox.setChecked(presentation.enabled)
+            checkbox.blockSignals(False)
+            checkbox.setEnabled(presentation.enabled or selected_count < MAX_SELECTED_SENSORS)
+            label = widgets["label"]
+            assert isinstance(label, QLineEdit)
+            if not label.hasFocus():
+                label.setText(presentation.display_label)
+            label.setEnabled(presentation.enabled)
+            color = widgets["color"]
+            assert isinstance(color, QPushButton)
+            color.setEnabled(presentation.enabled)
+            color.setStyleSheet(f"color: {presentation.font_color};")
+            value = widgets["value"]
+            assert isinstance(value, QLabel)
+            reading = readings.get(sensor_id)
+            value.setText(
+                f"{reading.value:.1f} °C"
+                if reading is not None and reading.value is not None
+                else (reading.availability.value.title() if reading is not None else "Unavailable")
+            )
+
+    @Slot(str, bool)
+    def _telemetry_selection_changed(self, sensor_id: str, selected: bool) -> None:
+        try:
+            self._telemetry_store.set_selected(
+                self._telemetry_presentations, sensor_id, selected
+            )
+        except (ValueError, TelemetryPresentationError) as error:
+            self._message(str(error))
+        self._update_telemetry_controls()
+        self._render_orbit_preview()
+
+    def _telemetry_label_changed(self, sensor_id: str, field: QLineEdit) -> None:
+        try:
+            self._telemetry_store.set_label(
+                self._telemetry_presentations, sensor_id, field.text()
+            )
+        except (ValueError, TelemetryPresentationError) as error:
+            self._message(str(error))
+        self._update_telemetry_controls()
+        self._render_orbit_preview()
+
+    def _telemetry_color_requested(self, sensor_id: str) -> None:
+        presentation = self._telemetry_presentations.sensor(sensor_id)
+        chosen = QColorDialog.getColor(QColor(presentation.font_color), self, "Telemetry Font Color")
+        if not chosen.isValid():
+            return
+        try:
+            self._telemetry_store.set_color(
+                self._telemetry_presentations, sensor_id, chosen.name().upper()
+            )
+        except (ValueError, TelemetryPresentationError) as error:
+            self._message(str(error))
+        self._update_telemetry_controls()
+        self._render_orbit_preview()
+
+    def _orbit_frame(self, phase: float) -> OrbitFrame | None:
+        selected = self._telemetry_presentations.selected
+        if not selected:
+            return None
+        readings = {
+            reading.sensor.sensor_id: reading
+            for reading in (self._telemetry_snapshot.readings if self._telemetry_snapshot else ())
+        }
+        items = []
+        for presentation in selected:
+            reading = readings.get(presentation.sensor_id)
+            items.append(
+                OrbitItem(
+                    presentation.display_label,
+                    reading.value if reading is not None else None,
+                    presentation.font_color,
+                    reading.availability.value if reading is not None else "unavailable",
+                )
+            )
+        return OrbitFrame(tuple(items), phase)
+
+    @Slot()
+    def _render_orbit_preview(self) -> None:
+        if self._profiles.active_profile_id != ProfileType.THERMALS.value:
+            return
+        frame = self._orbit_frame(phase_at(time.monotonic(), self._orbit_preview_started))
+        if frame is None:
+            self.preview.clear()
+            self.preview.setText("Select up to 2 temperatures")
+            self.preview_caption.setText("ORBIT PREVIEW  •  480 × 480")
+            return
+        pixmap = QPixmap()
+        pixmap.loadFromData(render_orbit_jpeg(frame), "JPEG")
+        self.preview.setPixmap(
+            pixmap.scaled(330, 330, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        )
+        self.preview_caption.setText("ORBIT  •  LIVE PREVIEW  •  480 × 480")
+
+    @Slot(float)
+    def _queue_orbit_frame(self, phase: float) -> None:
+        frame = self._orbit_frame(phase)
+        if frame is None:
+            self._orbit_playback.stop()
+            self._operation_failed("thermals", "no telemetry item is selected")
+            return
+        self.orbit_frame_requested.emit(frame)
+
     def _clear_selected_media(self) -> None:
         self._selected_path = None
         self._online_gif_data = None
@@ -410,18 +709,18 @@ class MainWindow(QMainWindow):
         self.select_button.setVisible(media_mode)
         self.gif_search_button.setVisible(gif_mode)
         self.mode_combo.setVisible(media_mode)
-        self.send_button.setVisible(media_mode)
+        self.send_button.setVisible(media_mode or active is ProfileType.THERMALS)
         creative_mode = active is ProfileType.CREATIVE
-        self.mode_placeholder.setVisible(active is ProfileType.THERMALS)
+        self.mode_placeholder.setVisible(False)
+        self.thermals_panel.setVisible(active is ProfileType.THERMALS)
         self.creative_panel.setVisible(creative_mode)
         if active is ProfileType.IMAGE:
             self.select_button.setText("Select Image")
         elif active is ProfileType.GIF:
             self.select_button.setText("Select GIF")
         elif active is ProfileType.THERMALS:
-            self.mode_placeholder.setText(
-                "Thermals mode is ready for future CPU/GPU telemetry. No sensor polling is enabled yet."
-            )
+            self.send_button.setText("Send Thermals to LCD")
+            self._render_orbit_preview()
         if creative_mode:
             self._apply_creative_preset_ui()
         if media_mode:
@@ -465,6 +764,14 @@ class MainWindow(QMainWindow):
         self.gif_search_button.setEnabled(policy.select_image)
         self.mode_combo.setEnabled(policy.select_image)
         self.send_button.setEnabled(policy.send)
+        if self._profiles.active_profile_id == ProfileType.THERMALS.value:
+            self.send_button.setEnabled(
+                state in {AppState.READY, AppState.DISPLAYING}
+                and self._identity is not None
+                and bool(self._telemetry_presentations.selected)
+            )
+        else:
+            self.send_button.setText("Send to LCD")
         self.restore_button.setEnabled(policy.restore)
         self.tray_status_changed.emit(self.playback_status())
 
@@ -473,6 +780,8 @@ class MainWindow(QMainWindow):
             return "Hardware mode"
         if self._gif_playback.active:
             return "GIF playing"
+        if self._orbit_playback.active:
+            return "Thermals playing"
         if self._refresher.active or self._state is AppState.SENDING:
             return "Static image"
         if self._state is AppState.RESTORING:
@@ -490,6 +799,7 @@ class MainWindow(QMainWindow):
         if not devices:
             self._refresher.stop()
             self._gif_playback.stop()
+            self._orbit_playback.stop()
             self._identity = None
             self.device_name.setText("Nautilus LCD Cap")
             self.device_vid.setText("VID:PID —")
@@ -512,7 +822,7 @@ class MainWindow(QMainWindow):
             self.device_firmware.setText("Firmware reading…")
             self.configure_backend.emit(identity)
         else:
-            active = self._refresher.active or self._gif_playback.active
+            active = self._refresher.active or self._gif_playback.active or self._orbit_playback.active
             self._set_state(AppState.DISPLAYING if active else AppState.READY)
 
     @Slot()
@@ -532,6 +842,7 @@ class MainWindow(QMainWindow):
     def _operation_failed(self, action: str, message: str) -> None:
         self._refresher.stop()
         self._gif_playback.stop()
+        self._orbit_playback.stop()
         self._initial_send_jpeg = None
         self._set_state(AppState.ERROR)
         self._message(f"{action.capitalize()} failed: {message}")
@@ -678,10 +989,24 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _send(self) -> None:
+        active = ProfileType(self._profiles.active_profile_id)
+        if active is ProfileType.THERMALS:
+            if self._identity is None or self._orbit_frame(0.0) is None:
+                return
+            self._refresher.stop()
+            self._gif_playback.stop()
+            self._session_touched_display = True
+            self._set_state(AppState.SENDING)
+            self._message("Starting volatile Orbit thermals…")
+            self._orbit_measurements.clear()
+            self._orbit_measurement_started = time.monotonic()
+            self._orbit_playback.start()
+            return
         if self._selected_media is None or self._prepared_jpeg is None or self._identity is None:
             return
         self._refresher.stop()
         self._gif_playback.stop()
+        self._orbit_playback.stop()
         if self._selected_media.animated and self._selected_media.gif is not None:
             self._lcd_gif = self._selected_media.gif
             self._lcd_strategy = str(self.mode_combo.currentData())
@@ -731,6 +1056,30 @@ class MainWindow(QMainWindow):
         if first:
             self._message(f"GIF playback started ({report_count} reports)")
 
+    @Slot(object)
+    def _orbit_frame_sent(self, stats: OrbitTransferStats) -> None:
+        first = self._state is AppState.SENDING
+        self._orbit_playback.transfer_completed()
+        self._orbit_measurements.append(stats)
+        self._set_state(AppState.DISPLAYING)
+        if first:
+            self._message(
+                f"Orbit thermals started ({stats.report_count} reports, {stats.jpeg_bytes} bytes, "
+                f"{stats.total_seconds * 1000:.1f} ms total)"
+            )
+        elif len(self._orbit_measurements) % 10 == 0:
+            elapsed = max(time.monotonic() - self._orbit_measurement_started, 0.001)
+            recent = self._orbit_measurements[-10:]
+            average = lambda field: sum(getattr(item, field) for item in recent) / len(recent)
+            self._message(
+                f"Orbit: {len(self._orbit_measurements) / elapsed:.1f} FPS achieved; "
+                f"render {average('render_seconds') * 1000:.1f} ms; "
+                f"JPEG {average('encode_seconds') * 1000:.1f} ms / "
+                f"{average('jpeg_bytes') / 1024:.1f} KiB; "
+                f"HID {average('transfer_seconds') * 1000:.1f} ms; "
+                f"coalesced {self._orbit_playback.dropped_frames}"
+            )
+
     @Slot(int)
     def _image_refreshed(self, _report_count: int) -> None:
         self._refresher.transfer_completed()
@@ -741,6 +1090,7 @@ class MainWindow(QMainWindow):
             return
         self._refresher.stop()
         self._gif_playback.stop()
+        self._orbit_playback.stop()
         self._lcd_gif = None
         self._initial_send_jpeg = None
         self._set_state(AppState.RESTORING)
@@ -772,6 +1122,7 @@ class MainWindow(QMainWindow):
         self._close_to_tray = False
         self._refresher.stop()
         self._gif_playback.stop()
+        self._orbit_playback.stop()
         self._lcd_gif = None
         self._initial_send_jpeg = None
         if self._search_dialog is not None:
@@ -789,6 +1140,8 @@ class MainWindow(QMainWindow):
         if self._workers_stopped:
             return
         self._workers_stopped = True
+        self._telemetry_poller.stop()
+        self._orbit_preview_timer.stop()
         self._monitor.stop()
         if self._poll_timer is not None:
             self._poll_timer.stop()
@@ -804,6 +1157,7 @@ class MainWindow(QMainWindow):
             return
         self._refresher.stop()
         self._gif_playback.stop()
+        self._orbit_playback.stop()
         self._lcd_gif = None
         self._initial_send_jpeg = None
         if self._session_touched_display and self._identity is not None:
@@ -814,3 +1168,5 @@ class MainWindow(QMainWindow):
             return
         self._finish_shutdown()
         event.accept()
+    OrbitFrame,
+    OrbitItem,

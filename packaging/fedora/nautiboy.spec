@@ -2,7 +2,7 @@
 
 Name:           nautiboy
 Version:        0.2.0~dev0
-Release:        7%{?dist}
+Release:        11%{?dist}
 Summary:        Linux controller for Corsair NAUTILUS RS LCD displays
 
 License:        GPL-3.0-or-later
@@ -17,6 +17,7 @@ BuildRequires:  appstream
 BuildRequires:  systemd-rpm-macros
 Requires:       systemd-udev
 Requires:       python3-keyring
+Requires:       google-noto-sans-fonts
 
 %description
 NautiBoy is an unofficial Linux application for controlling the LCD on the
@@ -66,6 +67,18 @@ appstreamcli validate --no-net packaging/io.github.nautiboy.nautiboy.metainfo.xm
 %{_udevrulesdir}/70-nautilus-lcd.rules
 
 %changelog
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-11
+- Match the refined Orbit reference with larger type, layered arcs, and mascot divider
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-10
+- Refine Orbit visuals and add measured backlog-free LCD scheduling
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-9
+- Add the programmatic animated Orbit thermals preview and bounded scheduler
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-8
+- Add read-only telemetry discovery and two-item Thermals configuration
+
 * Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-7
 - Add persistent renameable Creative presets for installed UI validation
 

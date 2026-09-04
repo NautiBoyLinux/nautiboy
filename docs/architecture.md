@@ -11,15 +11,17 @@
    image pipeline, and schedules LCD frames without a backlog.
 5. `profiles` models four versioned functional modes and persists their UI-only
    state in an atomic per-user XDG JSON document.
-6. `providers` exposes provider-neutral results. The experimental GIPHY adapter
+6. `telemetry` discovers and samples normalized read-only Linux sensors. It is
+   independent of Qt, HID, media, rendering, and profile persistence.
+7. `providers` exposes provider-neutral results. The experimental GIPHY adapter
    is optional and resolves its credential from the process environment or
    desktop keyring.
-7. `network` performs bounded, cancellable Qt Network requests in a separate
+8. `network` performs bounded, cancellable Qt Network requests in a separate
    thread.
-8. `backends` owns direct hidraw access and revalidates device identity before
+9. `backends` owns direct hidraw access and revalidates device identity before
    every open.
-9. `application` and `models` define state-dependent control policy.
-10. `gui` presents state and uses timers with in-flight guards. The
+10. `application` and `models` define state-dependent control policy.
+11. `gui` presents state and uses timers with in-flight guards. The
    timer only queues work; every USB operation runs in `DeviceWorker` on its
    dedicated `QThread`.
 
@@ -54,10 +56,22 @@ The four fixed profile modes are Thermals, Image, GIF, and Creative. Profile
 selection and Image/GIF resize strategies persist in
 `$XDG_CONFIG_HOME/nautiboy/profiles.json`. Switching modes changes UI state
 only: it does not emit a device operation, stop active playback, or alter the
-LCD. Thermals and Creative are schema/UI foundations without telemetry or
+LCD. Thermals now uses the read-only Linux telemetry subsystem and the
+programmatic Orbit renderer. Creative remains a schema/UI foundation without
 compositing in this phase. Creative contains four stable, independently stored
 sub-presets; their active selection and renameable display names persist while
 their background and telemetry-overlay namespaces reserve future editor state.
+
+Telemetry hardware identity is separate from future user presentation state.
+Versioned presentation settings live in a separate atomic per-user
+`telemetry.json` file keyed by deterministic sensor ID. A strict maximum of two
+enabled items is enforced independently of the UI.
+Future Creative compositing has a fixed visual order: JPEG/GIF media background,
+optional animated Orbit perimeter overlay, then telemetry foreground. The
+background remains visually dominant, while telemetry always stays above it.
+Orbit is a framing effect confined to the perimeter and must never cover text.
+It reuses the existing programmatic Orbit geometry/timing and introduces no new
+HID behavior.
 
 Online search is not a prerequisite for local media. GIPHY downloads live only
 for the current session because standard GIPHY integrations may not persistently

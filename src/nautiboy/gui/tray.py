@@ -64,7 +64,7 @@ class TrayController:
     def set_status(self, status: str) -> None:
         self.status.setText(f"Status: {status}")
         self.restore_action.setEnabled(
-            status in {"GIF playing", "Static image", "Volatile display active"}
+            status in {"GIF playing", "Thermals playing", "Static image", "Volatile display active"}
         )
 
     def _shutdown_ready(self) -> None:

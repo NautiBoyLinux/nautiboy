@@ -142,7 +142,9 @@ def _use_gif_mode(window) -> None:
 
 def test_no_provider_dialog_explains_local_media_remains_available(monkeypatch) -> None:
     monkeypatch.delenv("NAUTIBOY_GIPHY_API_KEY", raising=False)
-    dialog = GifSearchDialog(GiphyProvider())
+    # Explicitly bypass the real desktop keyring: automated tests must not read
+    # or depend on a user's configured credential.
+    dialog = GifSearchDialog(GiphyProvider(api_key=""))
     try:
         assert "not configured" in dialog.status.text()
         assert "Local JPEG, PNG, and GIF" in dialog.status.text()

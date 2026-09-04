@@ -37,8 +37,9 @@ def test_mode_specific_controls_and_placeholders(monkeypatch, tmp_path: Path) ->
         assert window.select_button.text() == "Select GIF"
         assert not window.gif_search_button.isHidden()
         window._switch_profile("thermals")
-        assert window.select_button.isHidden() and window.send_button.isHidden()
-        assert "No sensor polling" in window.mode_placeholder.text()
+        assert window.select_button.isHidden() and not window.send_button.isHidden()
+        assert window.send_button.text() == "Send Thermals to LCD"
+        assert not window.thermals_panel.isHidden()
         assert not window.restore_button.isHidden()
         window._switch_profile("creative")
         assert not window.creative_panel.isHidden()

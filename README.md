@@ -27,6 +27,7 @@ by, or supported by Corsair.
 - Per-user single-instance activation through a Qt local socket
 - Optional per-user XDG login startup, hidden to tray by default
 - Four persistent functional modes and four renameable Creative sub-presets
+- Read-only Linux temperature discovery and two-item Thermals configuration
 - Normal-user operation through a narrowly scoped `uaccess` rule
 
 ## Hardware support
