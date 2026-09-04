@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.nautiboy.NautiBoy</id>
+  <id>io.github.nautiboy.nautiboy</id>
   <name>NautiBoy</name>
   <summary>Linux controller for Corsair NAUTILUS RS LCD displays</summary>
   <metadata_license>CC0-1.0</metadata_license>
@@ -14,9 +14,14 @@
   </description>
   <url type="homepage">https://github.com/nautiboy/nautiboy</url>
   <url type="vcs-browser">https://github.com/nautiboy/nautiboy</url>
-  <launchable type="desktop-id">io.github.nautiboy.NautiBoy.desktop</launchable>
+  <launchable type="desktop-id">io.github.nautiboy.nautiboy.desktop</launchable>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.0" date="2026-09-04" type="development">
+      <description>
+        <p>Adds hardware-validated local GIF playback, bounded deadline scheduling, KDE tray operation, per-user autostart, single-instance protection, and experimental GIPHY development search.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-09-04">
       <description>
         <p>First hardware-validated static-image release.</p>

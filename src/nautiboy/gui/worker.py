@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from nautiboy.backends.direct_hidraw import DirectNautilusBackend
@@ -13,6 +15,7 @@ class DeviceWorker(QObject):
     firmware_ready = Signal(str)
     image_sent = Signal(int)
     image_refreshed = Signal(int)
+    gif_frame_sent = Signal(int, int, float)
     restored = Signal()
     failed = Signal(str, str)
 
@@ -50,6 +53,16 @@ class DeviceWorker(QObject):
             self.image_refreshed.emit(self._required_backend().send_static_image(jpeg))
         except Exception as error:  # boundary: one failure stops scheduling in the UI
             self.failed.emit("refresh", str(error))
+
+    @Slot(object, int, str)
+    def send_gif_frame(self, document: object, index: int, strategy: str) -> None:
+        try:
+            started = time.monotonic()
+            _rendered, jpeg = document.render_frame(index, strategy)
+            reports = self._required_backend().send_static_image(jpeg)
+            self.gif_frame_sent.emit(index, reports, time.monotonic() - started)
+        except Exception as error:  # boundary: decode/HID failure stops scheduling
+            self.failed.emit("animation", str(error))
 
     @Slot()
     def restore(self) -> None:

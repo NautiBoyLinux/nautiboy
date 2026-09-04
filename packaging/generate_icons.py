@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_ID = "io.github.nautiboy.NautiBoy"
+APP_ID = "io.github.nautiboy.nautiboy"
 REFERENCE = ROOT / "src/nautiboy/assets/logo-reference-original.png"
 SOURCE = ROOT / "src/nautiboy/assets/nautiboy-icon-development-source.png"
 SIZES = (16, 32, 48, 64, 128, 256)

@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import QThread, QTimer, Qt, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QPixmap
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, QThread, QTimer, Qt, Signal, Slot
+from PySide6.QtGui import QCloseEvent, QMovie, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -23,12 +23,17 @@ from PySide6.QtWidgets import (
 )
 
 from nautiboy.application import control_policy, state_after_image_error
-from nautiboy.branding import APP_NAME, DISCLAIMER, asset_path
+from nautiboy.branding import APP_NAME, DISCLAIMER, application_icon
 from nautiboy.device.discovery import DeviceMonitor, discover_supported_devices
 from nautiboy.device.identity import DeviceIdentity
-from nautiboy.imaging.processor import ImageProcessingError, ResizeStrategy, prepare_image
+from nautiboy.imaging.processor import ImageProcessingError, ResizeStrategy
+from nautiboy.gif.playback import GifPlaybackController
+from nautiboy.media import PreparedMedia, prepare_downloaded_gif, prepare_local_media
 from nautiboy.models import BUSY_STATES, AppState
+from nautiboy.providers.giphy import GiphyProvider
 
+from .gif_search_dialog import GifSearchDialog
+from .preferences_dialog import PreferencesDialog
 from .refresh import StaticImageRefresher
 from .worker import DeviceWorker
 
@@ -41,7 +46,11 @@ class MainWindow(QMainWindow):
     send_requested = Signal(bytes)
     refresh_requested = Signal(bytes)
     restore_requested = Signal()
+    gif_frame_requested = Signal(object, int, str)
     rescan_requested = Signal()
+    hidden_to_tray = Signal()
+    tray_status_changed = Signal(str)
+    shutdown_ready = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -52,13 +61,25 @@ class MainWindow(QMainWindow):
         self._identity: DeviceIdentity | None = None
         self._selected_path: Path | None = None
         self._prepared_jpeg: bytes | None = None
+        self._selected_media: PreparedMedia | None = None
+        self._lcd_gif = None
+        self._lcd_strategy = ResizeStrategy.FIT.value
+        self._preview_movie: QMovie | None = None
+        self._preview_buffer: QBuffer | None = None
+        self._online_gif_data: bytes | None = None
         self._session_touched_display = False
         self._close_pending = False
+        self._close_to_tray = False
+        self._quit_requested = False
+        self._workers_stopped = False
+        self._search_dialog: GifSearchDialog | None = None
         self._initial_send_jpeg: bytes | None = None
 
         self._build_ui()
         self._refresher = StaticImageRefresher(self)
         self._refresher.refresh_requested.connect(self._queue_refresh)
+        self._gif_playback = GifPlaybackController(self)
+        self._gif_playback.frame_requested.connect(self._queue_gif_frame)
         self._thread = QThread(self)
         self._worker = DeviceWorker()
         self._worker.moveToThread(self._thread)
@@ -67,10 +88,12 @@ class MainWindow(QMainWindow):
         self.send_requested.connect(self._worker.send_image)
         self.refresh_requested.connect(self._worker.refresh_image)
         self.restore_requested.connect(self._worker.restore)
+        self.gif_frame_requested.connect(self._worker.send_gif_frame)
         self._worker.configured.connect(self._backend_configured)
         self._worker.firmware_ready.connect(self._firmware_ready)
         self._worker.image_sent.connect(self._image_sent)
         self._worker.image_refreshed.connect(self._image_refreshed)
+        self._worker.gif_frame_sent.connect(self._gif_frame_sent)
         self._worker.restored.connect(self._restored)
         self._worker.failed.connect(self._operation_failed)
         self._thread.start()
@@ -101,14 +124,7 @@ class MainWindow(QMainWindow):
         header_layout.setContentsMargins(14, 11, 14, 11)
         logo = QLabel()
         logo.setFixedSize(56, 56)
-        logo.setPixmap(
-            QPixmap(str(asset_path("nautiboy-icon-development-source.png"))).scaled(
-                56,
-                56,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
+        logo.setPixmap(application_icon().pixmap(56, 56))
         header_layout.addWidget(logo)
         brand = QVBoxLayout()
         brand.setSpacing(0)
@@ -127,6 +143,9 @@ class MainWindow(QMainWindow):
         brand.addWidget(subtitle)
         header_layout.addLayout(brand)
         header_layout.addStretch()
+        self.settings_button = QPushButton("Settings")
+        self.settings_button.setObjectName("detailsButton")
+        header_layout.addWidget(self.settings_button)
         self.details_button = QPushButton("View Details")
         self.details_button.setObjectName("detailsButton")
         self.details_button.setCheckable(True)
@@ -140,21 +159,26 @@ class MainWindow(QMainWindow):
         preview_layout = QVBoxLayout(preview_card)
         preview_layout.setContentsMargins(16, 16, 16, 13)
         preview_layout.setSpacing(11)
-        self.preview = QLabel("Select a JPEG or PNG")
+        self.preview = QLabel("Select a JPEG, PNG, or GIF")
         self.preview.setObjectName("previewSurface")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setFixedSize(330, 330)
         preview_layout.addWidget(self.preview, alignment=Qt.AlignmentFlag.AlignCenter)
-        preview_caption = QLabel("PREVIEW  •  480 × 480")
-        preview_caption.setObjectName("previewCaption")
-        preview_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        preview_layout.addWidget(preview_caption)
+        self.preview_caption = QLabel("PREVIEW  •  480 × 480")
+        self.preview_caption.setObjectName("previewCaption")
+        self.preview_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_caption.setWordWrap(True)
+        preview_layout.addWidget(self.preview_caption)
         content.addWidget(preview_card)
 
         actions = QVBoxLayout()
         actions.setSpacing(14)
-        self.select_button = QPushButton("Select Image")
+        select_row = QHBoxLayout()
+        self.select_button = QPushButton("Select Local Media")
         self.select_button.setObjectName("selectButton")
+        self.gif_search_button = QPushButton("GIF Search")
+        select_row.addWidget(self.select_button)
+        select_row.addWidget(self.gif_search_button)
         self.mode_combo = QComboBox()
         # Store strings because QVariant does not preserve Python Enum identity.
         self.mode_combo.addItem("Fit (Keep Aspect Ratio)", ResizeStrategy.FIT.value)
@@ -163,7 +187,7 @@ class MainWindow(QMainWindow):
         self.send_button.setObjectName("sendButton")
         self.restore_button = QPushButton("Restore Hardware Mode")
         self.restore_button.setObjectName("restoreButton")
-        actions.addWidget(self.select_button)
+        actions.addLayout(select_row)
         actions.addWidget(self.mode_combo)
         actions.addWidget(self.send_button)
         actions.addWidget(self.restore_button)
@@ -225,6 +249,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self.select_button.clicked.connect(self._select_image)
+        self.settings_button.clicked.connect(self._open_preferences)
+        self.gif_search_button.clicked.connect(self._open_gif_search)
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
         self.send_button.clicked.connect(self._send)
         self.restore_button.clicked.connect(self._restore)
@@ -234,6 +260,10 @@ class MainWindow(QMainWindow):
     def _toggle_details(self, visible: bool) -> None:
         self.details_card.setVisible(visible)
         self.details_button.setText("Hide Details" if visible else "View Details")
+
+    @Slot()
+    def _open_preferences(self) -> None:
+        PreferencesDialog(self).exec()
 
     @staticmethod
     def _refresh_widget_style(widget: QWidget) -> None:
@@ -256,9 +286,25 @@ class MainWindow(QMainWindow):
             session_touched_display=self._session_touched_display,
         )
         self.select_button.setEnabled(policy.select_image)
+        self.gif_search_button.setEnabled(policy.select_image)
         self.mode_combo.setEnabled(policy.select_image)
         self.send_button.setEnabled(policy.send)
         self.restore_button.setEnabled(policy.restore)
+        self.tray_status_changed.emit(self.playback_status())
+
+    def playback_status(self) -> str:
+        if not self._session_touched_display:
+            return "Hardware mode"
+        if self._gif_playback.active:
+            return "GIF playing"
+        if self._refresher.active or self._state is AppState.SENDING:
+            return "Static image"
+        if self._state is AppState.RESTORING:
+            return "Restoring hardware mode"
+        return "Volatile display active"
+
+    def enable_close_to_tray(self) -> None:
+        self._close_to_tray = True
 
     @Slot()
     def _rescan(self) -> None:
@@ -267,6 +313,7 @@ class MainWindow(QMainWindow):
         devices = discover_supported_devices()
         if not devices:
             self._refresher.stop()
+            self._gif_playback.stop()
             self._identity = None
             self.device_name.setText("Nautilus LCD Cap")
             self.device_vid.setText("VID:PID —")
@@ -289,7 +336,8 @@ class MainWindow(QMainWindow):
             self.device_firmware.setText("Firmware reading…")
             self.configure_backend.emit(identity)
         else:
-            self._set_state(AppState.DISPLAYING if self._refresher.active else AppState.READY)
+            active = self._refresher.active or self._gif_playback.active
+            self._set_state(AppState.DISPLAYING if active else AppState.READY)
 
     @Slot()
     def _backend_configured(self) -> None:
@@ -307,6 +355,7 @@ class MainWindow(QMainWindow):
     @Slot(str, str)
     def _operation_failed(self, action: str, message: str) -> None:
         self._refresher.stop()
+        self._gif_playback.stop()
         self._initial_send_jpeg = None
         self._set_state(AppState.ERROR)
         self._message(f"{action.capitalize()} failed: {message}")
@@ -319,43 +368,123 @@ class MainWindow(QMainWindow):
     @Slot()
     def _select_image(self) -> None:
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Select image", str(Path.home()), "Images (*.jpg *.jpeg *.png)"
+            self, "Select local media", str(Path.home()), "Media (*.jpg *.jpeg *.png *.gif)"
         )
         if filename:
             self._selected_path = Path(filename)
+            self._online_gif_data = None
             self._prepare_selected()
 
     @Slot()
     def _mode_changed(self) -> None:
         if self._selected_path is not None:
             self._prepare_selected()
+        elif self._online_gif_data is not None and self._selected_media is not None:
+            try:
+                self._set_selected_media(
+                    prepare_downloaded_gif(
+                        self._online_gif_data,
+                        self._selected_media.title,
+                        self.mode_combo.currentData(),
+                    )
+                )
+            except ImageProcessingError as error:
+                self._message(str(error))
 
     def _prepare_selected(self) -> None:
         assert self._selected_path is not None
         strategy = self.mode_combo.currentData()
         try:
-            _rendered, jpeg = prepare_image(self._selected_path, strategy)
+            media = prepare_local_media(self._selected_path, strategy)
         except ImageProcessingError as error:
             self._prepared_jpeg = None
+            self._selected_media = None
             self.preview.setText("Invalid image")
             self._message(str(error))
             self._set_state(state_after_image_error(has_device=self._identity is not None))
             return
-        self._prepared_jpeg = jpeg
-        pixmap = QPixmap()
-        pixmap.loadFromData(jpeg, "JPEG")
-        self.preview.setPixmap(
-            pixmap.scaled(330, 330, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        )
+        self._set_selected_media(media)
         self._message(f"Prepared {self._selected_path.name} using {ResizeStrategy(strategy).value}")
+        if self._identity is not None:
+            self._set_state(AppState.DISPLAYING if self._session_touched_display else AppState.READY)
+
+    def _set_selected_media(self, media: PreparedMedia) -> None:
+        self._selected_media = media
+        self._prepared_jpeg = media.static_jpeg or media.preview_jpeg
+        self._stop_preview()
+        if media.animated and media.gif is not None:
+            self._preview_buffer = QBuffer(self)
+            self._preview_buffer.setData(QByteArray(media.gif.data))
+            self._preview_buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+            self._preview_movie = QMovie(self._preview_buffer, b"GIF", self)
+            width_ratio = self.preview.width() / media.width
+            height_ratio = self.preview.height() / media.height
+            strategy = ResizeStrategy(self.mode_combo.currentData())
+            scale = min(width_ratio, height_ratio) if strategy is ResizeStrategy.FIT else max(width_ratio, height_ratio)
+            self._preview_movie.setScaledSize(
+                QSize(max(1, round(media.width * scale)), max(1, round(media.height * scale)))
+            )
+            self.preview.setMovie(self._preview_movie)
+            self._preview_movie.start()
+        else:
+            pixmap = QPixmap()
+            pixmap.loadFromData(media.preview_jpeg, "JPEG")
+            self.preview.setPixmap(
+                pixmap.scaled(330, 330, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            )
+        kind = "Animated" if media.animated else "Static"
+        duration = f" • {media.duration_ms / 1000:.1f}s" if media.animated else ""
+        self.preview_caption.setText(
+            f"{media.title}\n{kind} • {media.width} × {media.height} • {media.frame_count} frame(s){duration}"
+        )
+
+    def _stop_preview(self) -> None:
+        if self._preview_movie is not None:
+            self._preview_movie.stop()
+        self._preview_movie = None
+        if self._preview_buffer is not None:
+            self._preview_buffer.close()
+        self._preview_buffer = None
+
+    @Slot()
+    def _open_gif_search(self) -> None:
+        dialog = GifSearchDialog(GiphyProvider(), self)
+        self._search_dialog = dialog
+        dialog.media_selected.connect(self._online_gif_selected)
+        dialog.exec()
+        self._search_dialog = None
+
+    @Slot(bytes, str)
+    def _online_gif_selected(self, data: bytes, title: str) -> None:
+        try:
+            media = prepare_downloaded_gif(data, title, self.mode_combo.currentData())
+        except ImageProcessingError as error:
+            self._message(str(error))
+            self._set_state(state_after_image_error(has_device=self._identity is not None))
+            return
+        self._selected_path = None
+        self._online_gif_data = data
+        self._set_selected_media(media)
+        self._message(f"Prepared experimental online GIF: {title}")
         if self._identity is not None:
             self._set_state(AppState.DISPLAYING if self._session_touched_display else AppState.READY)
 
     @Slot()
     def _send(self) -> None:
-        if self._prepared_jpeg is None or self._identity is None:
+        if self._selected_media is None or self._prepared_jpeg is None or self._identity is None:
             return
         self._refresher.stop()
+        self._gif_playback.stop()
+        if self._selected_media.animated and self._selected_media.gif is not None:
+            self._lcd_gif = self._selected_media.gif
+            self._lcd_strategy = str(self.mode_combo.currentData())
+            self._initial_send_jpeg = None
+            self._session_touched_display = True
+            self._set_state(AppState.SENDING)
+            self._message("Starting volatile GIF playback…")
+            self._gif_playback.start(self._lcd_gif)
+            return
+        self._lcd_gif = None
         self._initial_send_jpeg = self._prepared_jpeg
         self._session_touched_display = True
         self._set_state(AppState.SENDING)
@@ -377,6 +506,25 @@ class MainWindow(QMainWindow):
         self.refresh_requested.emit(jpeg)
 
     @Slot(int)
+    def _queue_gif_frame(self, index: int) -> None:
+        if self._lcd_gif is not None:
+            self.gif_frame_requested.emit(self._lcd_gif, index, self._lcd_strategy)
+
+    @Slot(int, int, float)
+    def _gif_frame_sent(self, index: int, report_count: int, duration_seconds: float) -> None:
+        first = self._state is AppState.SENDING
+        self._gif_playback.transfer_completed()
+        self._set_state(AppState.DISPLAYING)
+        frame_count = self._lcd_gif.frame_count if self._lcd_gif is not None else 0
+        self._message(
+            f"GIF frame {index + 1}/{frame_count}: {report_count} reports in "
+            f"{duration_seconds * 1000:.1f} ms; "
+            f"coalesced total {self._gif_playback.coalesced_frames}"
+        )
+        if first:
+            self._message(f"GIF playback started ({report_count} reports)")
+
+    @Slot(int)
     def _image_refreshed(self, _report_count: int) -> None:
         self._refresher.transfer_completed()
 
@@ -385,22 +533,71 @@ class MainWindow(QMainWindow):
         if self._identity is None or not self._session_touched_display:
             return
         self._refresher.stop()
+        self._gif_playback.stop()
+        self._lcd_gif = None
         self._initial_send_jpeg = None
         self._set_state(AppState.RESTORING)
         self._message("Restoring hardware mode…")
         self.restore_requested.emit()
 
     @Slot()
+    def restore_hardware_mode(self) -> None:
+        """Public action shared by the main window and system tray."""
+        self._restore()
+
+    @Slot()
     def _restored(self) -> None:
         self._session_touched_display = False
         self._set_state(AppState.READY)
         self._message("Hardware mode restored")
-        if self._close_pending:
+        if self._quit_requested:
+            self._finish_shutdown()
+        elif self._close_pending:
             self._close_pending = False
             self.close()
 
-    def closeEvent(self, event: QCloseEvent) -> None:
+    @Slot()
+    def request_quit(self) -> None:
+        """Perform the only true application shutdown path."""
+        if self._quit_requested:
+            return
+        self._quit_requested = True
+        self._close_to_tray = False
         self._refresher.stop()
+        self._gif_playback.stop()
+        self._lcd_gif = None
+        self._initial_send_jpeg = None
+        if self._search_dialog is not None:
+            self._search_dialog.reject()
+            self._search_dialog = None
+        if self._session_touched_display and self._identity is not None:
+            self._set_state(AppState.RESTORING)
+            self._message("Restoring hardware mode before quit…")
+            # Serialized behind any already-running operation in DeviceWorker.
+            self.restore_requested.emit()
+            return
+        self._finish_shutdown()
+
+    def _finish_shutdown(self) -> None:
+        if self._workers_stopped:
+            return
+        self._workers_stopped = True
+        self._monitor.stop()
+        if self._poll_timer is not None:
+            self._poll_timer.stop()
+        self._thread.quit()
+        self._thread.wait(3000)
+        self.shutdown_ready.emit()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self._close_to_tray and not self._quit_requested:
+            event.ignore()
+            self.hide()
+            self.hidden_to_tray.emit()
+            return
+        self._refresher.stop()
+        self._gif_playback.stop()
+        self._lcd_gif = None
         self._initial_send_jpeg = None
         if self._session_touched_display and self._identity is not None:
             event.ignore()
@@ -408,9 +605,5 @@ class MainWindow(QMainWindow):
                 self._close_pending = True
                 self._restore()
             return
-        self._monitor.stop()
-        if self._poll_timer is not None:
-            self._poll_timer.stop()
-        self._thread.quit()
-        self._thread.wait(3000)
+        self._finish_shutdown()
         event.accept()

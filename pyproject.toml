@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nautiboy"
-version = "0.1.0"
+version = "0.2.0.dev0"
 description = "Open-source Linux controller for Corsair NAUTILUS RS LCD displays"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -35,7 +35,6 @@ include = [
   "/packaging",
   "/pyproject.toml",
   "/src",
-  "/test-assets",
   "/tests",
 ]
 

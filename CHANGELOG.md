@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.2.0 — in development
+
+- Added bounded local animated GIF decoding, preview, and LCD scheduling.
+- Added an optional provider-neutral online GIF browser with an experimental
+  GIPHY development adapter.
+- Kept online search independent from local JPEG, PNG, and GIF operation.
+- Preserved the hardware-validated v0.1 HID protocol and restoration behavior.
+- Added background playback, a system-tray menu, explicit safe Quit, and
+  per-user single-instance activation.
+- Added optional per-user XDG graphical-session autostart with background mode.
+- Standardized window, launcher, tray, and notification branding on one bundled
+  multi-resolution NautiBoy icon loader.
+- Normalized the provisional reverse-DNS application ID to
+  `io.github.nautiboy.nautiboy` before public release.
+- Added explicit XDG Desktop shortcut create/remove commands and Fedora RPM
+  packaging infrastructure.
+- Validated Fedora RPM installation, normal-user udev access, uninstall,
+  reinstall, and a post-reinstall hardware regression on Fedora KDE Plasma 44.
+- Completed the 142-test software suite and RPM `%check` validation.
+
 ## v0.1.0 — first hardware-validated release
 
 - Added strict discovery for CORSAIR Nautilus LCD Cap `1b1c:0c57`, interface 0.
