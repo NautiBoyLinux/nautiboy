@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QLabel, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox, QDialog, QDialogButtonBox, QGroupBox, QHBoxLayout, QLabel,
+    QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget,
+)
 
 from nautiboy.autostart import AutostartError, AutostartManager, UserPreferences
+from nautiboy.credentials import CredentialError, GiphyCredentialStore
+
+PREFERENCES_MINIMUM_WIDTH = 420
+PREFERENCES_MINIMUM_HEIGHT = 430
 
 
 class PreferencesDialog(QDialog):
@@ -14,11 +21,15 @@ class PreferencesDialog(QDialog):
         *,
         manager: AutostartManager | None = None,
         preferences: UserPreferences | None = None,
+        credential_store: GiphyCredentialStore | None = None,
     ) -> None:
         super().__init__(parent)
         self.manager = manager or AutostartManager()
         self.preferences = preferences or UserPreferences()
+        self.credential_store = credential_store or GiphyCredentialStore()
         self.setWindowTitle("NautiBoy Preferences")
+        self.setMinimumSize(PREFERENCES_MINIMUM_WIDTH, PREFERENCES_MINIMUM_HEIGHT)
+        self.resize(PREFERENCES_MINIMUM_WIDTH, PREFERENCES_MINIMUM_HEIGHT)
         layout = QVBoxLayout(self)
         self.launch_at_login = QCheckBox("Launch NautiBoy at login")
         self.start_minimized = QCheckBox("Start minimized to system tray")
@@ -36,10 +47,56 @@ class PreferencesDialog(QDialog):
         )
         note.setWordWrap(True)
         layout.addWidget(note)
+        giphy = QGroupBox("GIPHY (experimental)")
+        giphy_layout = QVBoxLayout(giphy)
+        self.giphy_status = QLabel()
+        self.giphy_key = QLineEdit()
+        self.giphy_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.giphy_key.setPlaceholderText("Enter API key")
+        actions = QHBoxLayout()
+        self.save_giphy_key = QPushButton("Save Key")
+        self.remove_giphy_key = QPushButton("Remove Key")
+        actions.addWidget(self.save_giphy_key)
+        actions.addWidget(self.remove_giphy_key)
+        giphy_layout.addWidget(self.giphy_status)
+        giphy_layout.addWidget(self.giphy_key)
+        giphy_layout.addLayout(actions)
+        layout.addWidget(giphy)
+        self.save_giphy_key.clicked.connect(self._save_giphy_key)
+        self.remove_giphy_key.clicked.connect(self._remove_giphy_key)
+        self._refresh_giphy_status()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _refresh_giphy_status(self) -> None:
+        try:
+            configured = self.credential_store.configured()
+            text = "GIPHY API key configured" if configured else "GIPHY API key not configured"
+        except CredentialError as error:
+            configured = False
+            text = f"Secret storage unavailable: {error}"
+        self.giphy_status.setText(text)
+        self.remove_giphy_key.setEnabled(configured)
+
+    def _save_giphy_key(self) -> None:
+        try:
+            self.credential_store.save(self.giphy_key.text())
+        except CredentialError as error:
+            QMessageBox.warning(self, "GIPHY key could not be saved", str(error))
+            return
+        self.giphy_key.clear()
+        self._refresh_giphy_status()
+
+    def _remove_giphy_key(self) -> None:
+        try:
+            self.credential_store.delete()
+        except CredentialError as error:
+            QMessageBox.warning(self, "GIPHY key could not be removed", str(error))
+            return
+        self.giphy_key.clear()
+        self._refresh_giphy_status()
 
     def _save(self) -> None:
         try:

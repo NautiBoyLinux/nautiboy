@@ -143,13 +143,60 @@ Hardware claims are limited to the CORSAIR Nautilus LCD Cap, VID:PID
 `1b1c:0c57`, interface 0, firmware `0.3.0.5`, on Fedora KDE Plasma 44. Other
 distributions, device IDs, interfaces, and firmware versions remain unverified.
 
-The final software suite contains 142 passing tests. Static JPEG/PNG, both local
+The final software suite contains 153 passing tests. Static JPEG/PNG, both local
 GIF scenarios (including variable-duration deadline coalescing), KDE
 tray/background behavior, single-instance operation, per-user autostart, Fedora
 RPM installation, uninstall/reinstall, and hardware-mode restoration are
 validated. Persistent controller storage remains out of scope.
 
-The GIPHY adapter remains experimental and requires a process environment key;
-no API key is embedded or persisted. Public distribution or enablement remains
-unresolved pending clarification of GIPHY licensing, attribution, and
-external-display use. Local GIF support is independent of GIPHY.
+The GIPHY adapter remains experimental. It accepts a process environment key
+or a per-user credential held by the Linux desktop secret service; no API key
+is embedded, logged, or stored in NautiBoy settings. Public distribution or
+enablement remains unresolved pending clarification of GIPHY licensing,
+attribution, and external-display use. Local GIF support is independent of
+GIPHY.
+
+## Secure GIPHY credential installed-app validation
+
+The Fedora `0.2.0~dev0-4` package was installed with `python3-keyring` and
+SecretStorage support. A real development key was entered by the user directly
+into the masked Preferences field and saved through the desktop keyring. The UI
+reported only that a key was configured and never displayed it again.
+
+The credential persisted across two complete application quits and KDE-menu
+relaunches without `NAUTIBOY_GIPHY_API_KEY`. Trending, a `cat` search, animated
+thumbnails, pagination, selection attribution, and the animated main preview
+all worked. The selected result played successfully on the physical LCD;
+Restore Hardware Mode returned the stored iCUE GIF. A final relaunch again
+reported the credential as configured.
+
+Post-test checks found no credential field or value in `settings.ini`, NautiBoy
+logs, the Git working tree, or the RPM payload. The environment override was
+not set for this installed-app test. This successful credential and playback
+validation does not resolve the separate GIPHY public-distribution, licensing,
+attribution, or external-display policy release gate.
+
+The constrained Codex namespace could not connect to the real user-session
+D-Bus and therefore reported keyring's fail-only backend. This was expected for
+that isolated environment. The installed application running in the real KDE
+session successfully saved and retrieved the credential through the desktop
+Secret Service integration, as demonstrated by persistence across the two full
+relaunches.
+
+The initial Preferences window was usable after manual expansion but opened too
+narrowly for the new controls. The final source sets a 420×430 minimum and
+initial size. It remains freely resizable larger and continues to follow normal
+Qt/KDE display scaling.
+
+### Technically validated
+
+- The experimental GIPHY implementation functions end to end.
+- Secure per-user credential persistence functions through the desktop keyring.
+- GIPHY search media previews and plays on the validated physical LCD.
+- Hardware-mode restoration remains successful afterward.
+
+### Public-release gate
+
+Technical validation does not authorize public distribution or enablement.
+GIPHY licensing, attribution requirements, and permission for external-display
+usage remain unresolved release gates.

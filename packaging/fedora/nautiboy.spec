@@ -2,7 +2,7 @@
 
 Name:           nautiboy
 Version:        0.2.0~dev0
-Release:        3%{?dist}
+Release:        5%{?dist}
 Summary:        Linux controller for Corsair NAUTILUS RS LCD displays
 
 License:        GPL-3.0-or-later
@@ -16,6 +16,7 @@ BuildRequires:  desktop-file-utils
 BuildRequires:  appstream
 BuildRequires:  systemd-rpm-macros
 Requires:       systemd-udev
+Requires:       python3-keyring
 
 %description
 NautiBoy is an unofficial Linux application for controlling the LCD on the
@@ -65,6 +66,12 @@ appstreamcli validate --no-net packaging/io.github.nautiboy.nautiboy.metainfo.xm
 %{_udevrulesdir}/70-nautilus-lcd.rules
 
 %changelog
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-5
+- Finalize secure GIPHY credentials and Preferences sizing validation
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-4
+- Add secure desktop-keyring configuration for the experimental GIPHY provider
+
 * Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-3
 - Finalize Fedora lifecycle and namespace-validation documentation
 

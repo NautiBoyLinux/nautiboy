@@ -6,6 +6,7 @@ import pytest
 
 from nautiboy.cache.media_cache import MediaCache
 from nautiboy.network.worker import MEDIA_MAX_BYTES, NetworkValidationError, NetworkWorker, _Transfer, validate_response
+from PySide6.QtCore import QUrl
 
 
 def test_valid_json_and_gif_responses() -> None:
@@ -66,6 +67,13 @@ def test_network_timeout_fails_once_without_retry() -> None:
     worker._timeout("one")
     assert failures == [("one", "network request timed out")]
     assert reply.aborted and not worker._transfers
+
+
+def test_success_callback_url_can_be_safely_stripped_of_credentials() -> None:
+    url = QUrl("https://api.giphy.com/v1/gifs/search?api_key=fake-secret&q=cat")
+    url.setQuery(None)
+    assert url.toString() == "https://api.giphy.com/v1/gifs/search"
+    assert "fake-secret" not in url.toString()
 
 
 def test_cache_hit_miss_and_corruption(tmp_path: Path) -> None:

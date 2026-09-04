@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
 from urllib.parse import urlencode
+
+from nautiboy.credentials import CredentialError, GiphyCredentialStore, resolve_giphy_api_key
 
 from .base import GifResult, SearchPage
 
@@ -14,8 +15,21 @@ class GiphyProvider:
     attribution = "Powered by GIPHY"
     endpoint = "https://api.giphy.com/v1/gifs"
 
-    def __init__(self, api_key: str | None = None) -> None:
-        self._api_key = api_key if api_key is not None else os.environ.get("NAUTIBOY_GIPHY_API_KEY", "")
+    def __init__(
+        self,
+        api_key: str | None = None,
+        *,
+        credential_store: GiphyCredentialStore | None = None,
+    ) -> None:
+        self.credential_error: str | None = None
+        if api_key is not None:
+            self._api_key = api_key.strip()
+            return
+        try:
+            self._api_key = resolve_giphy_api_key(credential_store) or ""
+        except CredentialError as error:
+            self._api_key = ""
+            self.credential_error = str(error)
 
     @property
     def available(self) -> bool:

@@ -5,6 +5,10 @@ Python application with Fedora's PEP 517/`pyproject-rpm-macros` workflow and
 uses Fedora packages for Python, PySide6, Pillow, and pyudev. It does not bundle
 the development virtual environment.
 
+`python3-keyring` supplies the standard desktop credential abstraction for the
+optional experimental GIPHY key. Fedora's package depends on SecretStorage for
+Freedesktop Secret Service integration with compatible desktop wallets.
+
 The binary RPM owns the `nautiboy` executable, Python package, desktop entry,
 AppStream metadata, hicolor icons, documentation, license, and the narrow rule:
 

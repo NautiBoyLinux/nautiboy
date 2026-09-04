@@ -107,7 +107,9 @@ class NetworkWorker(QObject):
         except NetworkValidationError as error:
             self._fail(request_id, str(error))
             return
-        final_url = transfer.reply.url().toString()
+        final = transfer.reply.url()
+        final.setQuery(None)
+        final_url = final.toString()
         self._remove(request_id)
         self.completed.emit(request_id, data, final_url)
 

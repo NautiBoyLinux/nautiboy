@@ -91,9 +91,11 @@ class GifSearchDialog(QDialog):
         cancel.clicked.connect(self.reject)
 
     def _show_unconfigured(self) -> None:
-        self.status.setText(
-            "Online GIF search is not configured. Local JPEG, PNG, and GIF selection remains fully available."
-        )
+        reason = getattr(self.provider, "credential_error", None)
+        prefix = "Online GIF search is not configured."
+        if reason:
+            prefix += f" Secret storage is unavailable: {reason}."
+        self.status.setText(f"{prefix} Local JPEG, PNG, and GIF selection remains fully available.")
         self.search_field.setEnabled(False)
         self.search_button.setEnabled(False)
         self.load_more.setEnabled(False)

@@ -12,9 +12,10 @@ volatile software control. Disconnects and all backend errors stop playback
 without retries. Restore and normal exit stop both GIF and static scheduling
 before the validated hardware-mode restore reports are issued.
 
-Online search is optional. `NAUTIBOY_GIPHY_API_KEY` enables the experimental
-GIPHY development provider for the current process. The key is not stored,
-displayed, or logged. Search metadata and media requests have finite timeouts,
+Online search is optional. A GIPHY API key may be saved from Preferences into
+the desktop's Secret Service/KWallet-compatible keyring. The process-only
+`NAUTIBOY_GIPHY_API_KEY` environment variable overrides a stored key. The key
+is not stored in NautiBoy settings, displayed, or logged. Search metadata and media requests have finite timeouts,
 are cancellable, require HTTPS and expected content types, and enforce response
 size limits.
 

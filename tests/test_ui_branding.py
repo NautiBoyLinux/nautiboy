@@ -20,6 +20,13 @@ from nautiboy.gui.theme import STYLESHEET
 from nautiboy.models import AppState
 from nautiboy.providers.giphy import GiphyProvider
 from nautiboy.gui.gif_search_dialog import GifSearchDialog
+from nautiboy.credentials import GiphyCredentialStore
+from nautiboy.gui.preferences_dialog import (
+    PREFERENCES_MINIMUM_HEIGHT,
+    PREFERENCES_MINIMUM_WIDTH,
+    PreferencesDialog,
+)
+from test_credentials import FakeKeyring
 
 
 def test_public_brand_identity() -> None:
@@ -323,3 +330,51 @@ def test_search_grid_uses_image_only_tiles_with_title_tooltips(monkeypatch) -> N
         assert card.accessibleName() == "Dancing cat"
     finally:
         dialog.reject()
+
+
+def test_preferences_masks_saves_and_removes_giphy_key(monkeypatch, tmp_path) -> None:
+    backend = FakeKeyring()
+    store = GiphyCredentialStore(backend)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    dialog = PreferencesDialog(credential_store=store)
+    try:
+        assert dialog.giphy_key.echoMode() is dialog.giphy_key.EchoMode.Password
+        assert "not configured" in dialog.giphy_status.text()
+        dialog.giphy_key.setText("ui-fake-secret")
+        dialog._save_giphy_key()
+        assert dialog.giphy_key.text() == ""
+        assert dialog.giphy_status.text() == "GIPHY API key configured"
+        assert "ui-fake-secret" not in dialog.giphy_status.text()
+        dialog._remove_giphy_key()
+        assert "not configured" in dialog.giphy_status.text()
+        assert store.retrieve() is None
+    finally:
+        dialog.reject()
+
+
+def test_preferences_opens_large_enough_for_all_controls(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    dialog = PreferencesDialog(credential_store=GiphyCredentialStore(FakeKeyring()))
+    try:
+        assert dialog.minimumWidth() == PREFERENCES_MINIMUM_WIDTH
+        assert dialog.minimumHeight() == PREFERENCES_MINIMUM_HEIGHT
+        assert dialog.width() >= PREFERENCES_MINIMUM_WIDTH
+        assert dialog.height() >= PREFERENCES_MINIMUM_HEIGHT
+    finally:
+        dialog.reject()
+
+
+def test_local_media_does_not_depend_on_credential_store(monkeypatch, tmp_path: Path) -> None:
+    class BrokenStore:
+        def retrieve(self):
+            raise AssertionError("local media attempted credential access")
+
+    window = _disconnected_window(monkeypatch)
+    path = tmp_path / "local.gif"
+    path.write_bytes(_animated_gif())
+    try:
+        window._selected_path = path
+        window._prepare_selected()
+        assert window._selected_media is not None
+    finally:
+        window.close()

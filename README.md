@@ -46,7 +46,7 @@ procedure and results.
 Both local-GIF v0.2 hardware validations and the incidental experimental GIPHY
 hardware result are recorded separately in
 [docs/hardware-validation-v0.2.md](docs/hardware-validation-v0.2.md).
-The same record covers the 142-test software suite, RPM `%check`, normal-user
+The same record covers the 153-test software suite, RPM `%check`, normal-user
 udev access, Fedora RPM installation and uninstall/reinstall lifecycle, and the
 successful post-reinstall static-image hardware regression. Persistent LCD
 storage was never accessed or modified.
@@ -146,10 +146,12 @@ according to its own security policy.
 
 ## Experimental online GIF search
 
-The development GIPHY adapter is enabled only when
-`NAUTIBOY_GIPHY_API_KEY` is present in NautiBoy's environment. The key is never
-stored or logged. Without it, the GIF Search window explains that search is not
-configured while all local-media features remain available.
+The experimental GIPHY adapter accepts a process-only
+`NAUTIBOY_GIPHY_API_KEY`, or a per-user key saved from Preferences into the
+Linux desktop secret service. The environment variable takes precedence. The
+key is never stored in NautiBoy settings, source files, logs, or media cache.
+Without a key, GIF Search explains that it is not configured while all local
+media features remain available.
 
 GIPHY media is session-only and is not written to NautiBoy's persistent cache.
 The search dialog displays “Powered by GIPHY” plus creator/source information

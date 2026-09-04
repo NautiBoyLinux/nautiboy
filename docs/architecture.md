@@ -52,6 +52,11 @@ for the current session because standard GIPHY integrations may not persistently
 cache media without approval. The generic XDG cache implementation is reserved
 for providers whose terms allow persistent caching.
 
+The optional GIPHY credential is resolved from the process environment first,
+then from the desktop keyring through Python keyring and Freedesktop Secret
+Service. NautiBoy settings contain no credential. Provider and Preferences code
+depend on a narrow credential-store boundary so tests use only fake secrets.
+
 Normal window close is a visibility operation when the tray controller is
 attached: it hides the existing window without touching either scheduler or the
 device session. Tray Restore stops scheduling before queuing the existing

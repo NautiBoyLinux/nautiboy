@@ -5,6 +5,8 @@ import json
 import pytest
 
 from nautiboy.providers.giphy import GiphyProvider
+from nautiboy.credentials import GiphyCredentialStore
+from test_credentials import FakeKeyring
 
 
 def payload(*, count: int = 1, total: int = 2, offset: int = 0) -> bytes:
@@ -26,7 +28,7 @@ def payload(*, count: int = 1, total: int = 2, offset: int = 0) -> bytes:
 
 def test_no_key_is_cleanly_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("NAUTIBOY_GIPHY_API_KEY", raising=False)
-    provider = GiphyProvider()
+    provider = GiphyProvider(credential_store=GiphyCredentialStore(FakeKeyring()))
     assert not provider.available
     with pytest.raises(RuntimeError, match="not configured"):
         provider.trending_url()
@@ -34,7 +36,7 @@ def test_no_key_is_cleanly_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_key_is_read_but_not_exposed_by_object_representation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NAUTIBOY_GIPHY_API_KEY", "private-test-value")
-    provider = GiphyProvider()
+    provider = GiphyProvider(credential_store=GiphyCredentialStore(FakeKeyring()))
     assert provider.available
     assert "private-test-value" not in repr(provider)
 
@@ -70,3 +72,19 @@ def test_provider_abstraction_does_not_leak_giphy_fields() -> None:
     assert set(result.__dataclass_fields__) == {
         "provider", "identifier", "title", "creator", "source_url", "preview_url", "original_url"
     }
+
+
+def test_stored_key_enables_provider_without_exposing_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NAUTIBOY_GIPHY_API_KEY", raising=False)
+    store = GiphyCredentialStore(FakeKeyring())
+    store.save("stored-private-test-value")
+    provider = GiphyProvider(credential_store=store)
+    assert provider.available
+    assert "stored-private-test-value" not in repr(provider)
+
+
+def test_invalid_key_provider_failure_is_clean() -> None:
+    provider = GiphyProvider("invalid-fake-key")
+    message = "HTTP 403: forbidden"
+    assert provider.available
+    assert "invalid-fake-key" not in message
