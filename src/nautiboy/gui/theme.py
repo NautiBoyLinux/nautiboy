@@ -41,7 +41,8 @@ QLabel#telemetryTitle {
 QLabel#telemetryCount, QLabel#telemetryValue {
     color: #aeb5d2;
 }
-QScrollArea#telemetryScroll, QScrollArea#telemetryScroll > QWidget > QWidget {
+QScrollArea#telemetryScroll, QScrollArea#telemetryScroll > QWidget > QWidget,
+QScrollArea#creativeScroll, QScrollArea#creativeScroll > QWidget > QWidget {
     background: transparent;
 }
 QGroupBox#telemetryDeviceGroup {

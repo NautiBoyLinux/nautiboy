@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
+from dataclasses import replace
+import io
 from pathlib import Path
 import time
+
+from PIL import Image
 
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, QThread, QTimer, Qt, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QColor, QMovie, QPixmap
@@ -32,6 +37,12 @@ from PySide6.QtWidgets import (
 
 from nautiboy.application import control_policy, state_after_image_error
 from nautiboy.branding import APP_NAME, DISCLAIMER, application_icon
+from nautiboy.creative import (
+    CreativeComposition,
+    CreativeFrameRequest,
+    CreativePlaybackController,
+    compose_creative_jpeg,
+)
 from nautiboy.device.discovery import DeviceMonitor, discover_supported_devices
 from nautiboy.device.identity import DeviceIdentity
 from nautiboy.imaging.processor import ImageProcessingError, ResizeStrategy
@@ -76,6 +87,7 @@ class MainWindow(QMainWindow):
     restore_requested = Signal()
     gif_frame_requested = Signal(object, int, str)
     orbit_frame_requested = Signal(object)
+    creative_frame_requested = Signal(object)
     rescan_requested = Signal()
     hidden_to_tray = Signal()
     tray_status_changed = Signal(str)
@@ -91,7 +103,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         super().__init__()
         self.setWindowTitle(APP_NAME)
-        self.resize(760, 680)
+        self.resize(760, 960)
         self.setMinimumSize(700, 620)
         self._state = AppState.DISCONNECTED
         self._identity: DeviceIdentity | None = None
@@ -122,6 +134,15 @@ class MainWindow(QMainWindow):
         self._orbit_measurements: list[OrbitTransferStats] = []
         self._orbit_measurement_started = 0.0
         self._orbit_playback.frame_requested.connect(self._queue_orbit_frame)
+        self._creative_media: dict[str, PreparedMedia] = {}
+        self._creative_preview_started = time.monotonic()
+        self._creative_lcd_preset: dict | None = None
+        self._creative_lcd_media: PreparedMedia | None = None
+        self._creative_lcd_presentations: tuple = ()
+        self._creative_measurements: list[OrbitTransferStats] = []
+        self._creative_measurement_started = 0.0
+        self._creative_playback = CreativePlaybackController(self)
+        self._creative_playback.frame_requested.connect(self._queue_creative_frame)
 
         self._build_ui()
         self._refresher = StaticImageRefresher(self)
@@ -138,12 +159,14 @@ class MainWindow(QMainWindow):
         self.restore_requested.connect(self._worker.restore)
         self.gif_frame_requested.connect(self._worker.send_gif_frame)
         self.orbit_frame_requested.connect(self._worker.send_orbit_frame)
+        self.creative_frame_requested.connect(self._worker.send_creative_frame)
         self._worker.configured.connect(self._backend_configured)
         self._worker.firmware_ready.connect(self._firmware_ready)
         self._worker.image_sent.connect(self._image_sent)
         self._worker.image_refreshed.connect(self._image_refreshed)
         self._worker.gif_frame_sent.connect(self._gif_frame_sent)
         self._worker.orbit_frame_sent.connect(self._orbit_frame_sent)
+        self._worker.creative_frame_sent.connect(self._creative_frame_sent)
         self._worker.restored.connect(self._restored)
         self._worker.failed.connect(self._operation_failed)
         self._thread.start()
@@ -168,7 +191,7 @@ class MainWindow(QMainWindow):
         self._telemetry_poller.start()
         self._orbit_preview_timer = QTimer(self)
         self._orbit_preview_timer.setInterval(ORBIT_PREVIEW_INTERVAL_MS)
-        self._orbit_preview_timer.timeout.connect(self._render_orbit_preview)
+        self._orbit_preview_timer.timeout.connect(self._render_dynamic_preview)
         self._orbit_preview_timer.start()
 
     def _build_ui(self) -> None:
@@ -327,13 +350,61 @@ class MainWindow(QMainWindow):
         creative_layout.addWidget(
             self.rename_preset_button, alignment=Qt.AlignmentFlag.AlignHCenter
         )
-        self.creative_placeholder = QLabel(
-            "Creative editing will support background media, telemetry overlays, and custom layouts."
+        self.creative_scroll = QScrollArea()
+        self.creative_scroll.setObjectName("creativeScroll")
+        self.creative_scroll.setWidgetResizable(True)
+        self.creative_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.creative_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.creative_placeholder.setObjectName("modePlaceholder")
-        self.creative_placeholder.setWordWrap(True)
-        self.creative_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        creative_layout.addWidget(self.creative_placeholder, 1)
+        self.creative_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOn
+        )
+        editor = QWidget()
+        editor_layout = QVBoxLayout(editor)
+        editor_layout.setContentsMargins(2, 2, 2, 2)
+        background_group = QGroupBox("Background")
+        background_layout = QVBoxLayout(background_group)
+        self.creative_select_button = QPushButton("Select JPEG, PNG, or GIF")
+        self.creative_giphy_button = QPushButton("Search GIPHY (experimental)")
+        self.creative_media_info = QLabel("No background selected")
+        self.creative_media_info.setWordWrap(True)
+        self.creative_resize_combo = QComboBox()
+        self.creative_resize_combo.addItem("Fit (Keep Aspect Ratio)", "fit")
+        self.creative_resize_combo.addItem("Center Crop", "center-crop")
+        background_layout.addWidget(self.creative_select_button)
+        background_layout.addWidget(self.creative_giphy_button)
+        background_layout.addWidget(self.creative_media_info)
+        background_layout.addWidget(self.creative_resize_combo)
+        editor_layout.addWidget(background_group)
+        orbit_group = QGroupBox("Orbit perimeter")
+        orbit_layout = QVBoxLayout(orbit_group)
+        self.creative_orbit_enabled = QCheckBox("Enable Orbit")
+        self.creative_orbit_animated = QCheckBox("Animate Orbit")
+        self.creative_follow_colors = QCheckBox("Follow telemetry colors")
+        color_row = QHBoxLayout()
+        self.creative_primary_color = QPushButton("Primary Color")
+        self.creative_secondary_color = QPushButton("Secondary Color")
+        color_row.addWidget(self.creative_primary_color)
+        color_row.addWidget(self.creative_secondary_color)
+        orbit_layout.addWidget(self.creative_orbit_enabled)
+        orbit_layout.addWidget(self.creative_orbit_animated)
+        orbit_layout.addWidget(self.creative_follow_colors)
+        orbit_layout.addLayout(color_row)
+        editor_layout.addWidget(orbit_group)
+        telemetry_group = QGroupBox("Telemetry foreground")
+        telemetry_layout = QVBoxLayout(telemetry_group)
+        self.creative_telemetry_enabled = QCheckBox("Enable Telemetry")
+        self.creative_telemetry_summary = QLabel("No telemetry selected")
+        self.creative_telemetry_summary.setWordWrap(True)
+        self.creative_configure_telemetry = QPushButton("Configure in Thermals")
+        telemetry_layout.addWidget(self.creative_telemetry_enabled)
+        telemetry_layout.addWidget(self.creative_telemetry_summary)
+        telemetry_layout.addWidget(self.creative_configure_telemetry)
+        editor_layout.addWidget(telemetry_group)
+        editor_layout.addStretch()
+        self.creative_scroll.setWidget(editor)
+        creative_layout.addWidget(self.creative_scroll, 1)
         actions.addLayout(select_row)
         actions.addWidget(self.mode_combo)
         actions.addWidget(self.send_button)
@@ -405,6 +476,16 @@ class MainWindow(QMainWindow):
         self.send_button.clicked.connect(self._send)
         self.restore_button.clicked.connect(self._restore)
         self.rename_preset_button.clicked.connect(self._rename_creative_preset)
+        self.creative_select_button.clicked.connect(self._select_creative_media)
+        self.creative_giphy_button.clicked.connect(self._open_creative_gif_search)
+        self.creative_resize_combo.currentIndexChanged.connect(self._creative_settings_changed)
+        self.creative_orbit_enabled.toggled.connect(self._creative_settings_changed)
+        self.creative_orbit_animated.toggled.connect(self._creative_settings_changed)
+        self.creative_follow_colors.toggled.connect(self._creative_settings_changed)
+        self.creative_telemetry_enabled.toggled.connect(self._creative_settings_changed)
+        self.creative_primary_color.clicked.connect(lambda: self._creative_color_requested("primary_color"))
+        self.creative_secondary_color.clicked.connect(lambda: self._creative_color_requested("secondary_color"))
+        self.creative_configure_telemetry.clicked.connect(lambda: self._switch_profile("thermals"))
         self.details_button.toggled.connect(self._toggle_details)
         self._apply_profile_ui()
 
@@ -420,7 +501,6 @@ class MainWindow(QMainWindow):
             self._profile_store.save(self._profiles)
         except ProfileStoreError as error:
             self._message(str(error))
-        self._clear_selected_media()
         self._apply_profile_ui()
 
     @Slot(int)
@@ -434,6 +514,7 @@ class MainWindow(QMainWindow):
         except ProfileStoreError as error:
             self._message(str(error))
         self._apply_creative_preset_ui()
+        self._render_creative_preview()
 
     @Slot()
     def _rename_creative_preset(self) -> None:
@@ -467,6 +548,151 @@ class MainWindow(QMainWindow):
             button.setText(button.fontMetrics().elidedText(name, Qt.TextElideMode.ElideRight, 76))
             button.setToolTip(name)
             button.setChecked(identifier == active)
+        preset = presets[active]
+        background = preset["background"]
+        orbit = preset["orbit_overlay"]
+        telemetry = preset["telemetry_overlay"]
+        widgets = (
+            self.creative_resize_combo, self.creative_orbit_enabled,
+            self.creative_orbit_animated, self.creative_follow_colors,
+            self.creative_telemetry_enabled,
+        )
+        for widget in widgets:
+            widget.blockSignals(True)
+        self.creative_resize_combo.setCurrentIndex(
+            self.creative_resize_combo.findData(background["resize_strategy"])
+        )
+        self.creative_orbit_enabled.setChecked(orbit["enabled"])
+        self.creative_orbit_animated.setChecked(orbit["animation_enabled"])
+        self.creative_follow_colors.setChecked(orbit["follow_telemetry_colors"])
+        self.creative_telemetry_enabled.setChecked(telemetry["enabled"])
+        for widget in widgets:
+            widget.blockSignals(False)
+        self.creative_orbit_animated.setEnabled(orbit["enabled"])
+        self.creative_follow_colors.setEnabled(orbit["enabled"])
+        custom_colors = orbit["enabled"] and not orbit["follow_telemetry_colors"]
+        self.creative_primary_color.setEnabled(custom_colors)
+        self.creative_secondary_color.setEnabled(custom_colors)
+        self.creative_primary_color.setStyleSheet(f"color: {orbit['primary_color']};")
+        self.creative_secondary_color.setStyleSheet(f"color: {orbit['secondary_color']};")
+        selected = self._telemetry_presentations.selected
+        self.creative_telemetry_summary.setText(
+            ", ".join(item.display_label for item in selected) if selected else "No telemetry selected"
+        )
+        media = self._creative_media.get(active)
+        if media is None and background.get("source_path"):
+            try:
+                media = prepare_local_media(background["source_path"], background["resize_strategy"])
+                self._creative_media[active] = media
+            except ImageProcessingError:
+                media = None
+        self.creative_media_info.setText(
+            f"{media.title} • {'Animated GIF' if media and media.animated else 'Static image'}"
+            if media else ("Saved media unavailable" if background.get("source_path") else "No background selected")
+        )
+
+    def _active_creative_preset(self) -> dict:
+        settings = self._profiles.profile(ProfileType.CREATIVE.value).settings
+        return next(item for item in settings["presets"] if item["id"] == settings["active_preset_id"])
+
+    @Slot()
+    def _select_creative_media(self) -> None:
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Select Creative background", str(Path.home()),
+            "Media (*.jpg *.jpeg *.png *.gif)",
+        )
+        if not filename:
+            return
+        preset = self._active_creative_preset()
+        strategy = str(self.creative_resize_combo.currentData())
+        try:
+            media = prepare_local_media(filename, strategy)
+        except ImageProcessingError as error:
+            self._message(str(error))
+            return
+        self._creative_media[preset["id"]] = media
+        try:
+            self._profile_store.update_creative_preset(
+                self._profiles, preset["id"], "background",
+                {"media_kind": "gif" if media.gif else "image", "source_path": filename,
+                 "resize_strategy": strategy},
+            )
+        except ProfileStoreError as error:
+            self._message(str(error))
+        self._apply_creative_preset_ui()
+        self._render_creative_preview()
+
+    @Slot()
+    def _open_creative_gif_search(self) -> None:
+        """Reuse the provider-neutral GIF search for the active Creative preset."""
+        dialog = GifSearchDialog(GiphyProvider(), self)
+        self._search_dialog = dialog
+        dialog.media_selected.connect(self._creative_online_gif_selected)
+        dialog.exec()
+        self._search_dialog = None
+
+    @Slot(bytes, str)
+    def _creative_online_gif_selected(self, data: bytes, title: str) -> None:
+        if self._profiles.active_profile_id != ProfileType.CREATIVE.value:
+            self._message("Creative GIPHY selection is available only in Creative mode")
+            return
+        preset = self._active_creative_preset()
+        try:
+            media = prepare_downloaded_gif(
+                data, title, preset["background"]["resize_strategy"]
+            )
+        except ImageProcessingError as error:
+            self._message(str(error))
+            return
+        self._creative_media[preset["id"]] = media
+        try:
+            self._profile_store.update_creative_preset(
+                self._profiles, preset["id"], "background",
+                {"media_kind": "gif", "source_path": None},
+            )
+        except ProfileStoreError as error:
+            self._message(str(error))
+        self._apply_creative_preset_ui()
+        self._render_creative_preview()
+        self._message(f"Prepared experimental GIPHY background: {title}")
+
+    @Slot()
+    def _creative_settings_changed(self) -> None:
+        preset = self._active_creative_preset()
+        try:
+            self._profile_store.update_creative_preset(
+                self._profiles, preset["id"], "background",
+                {"resize_strategy": str(self.creative_resize_combo.currentData())},
+            )
+            self._profile_store.update_creative_preset(
+                self._profiles, preset["id"], "orbit_overlay",
+                {"enabled": self.creative_orbit_enabled.isChecked(),
+                 "animation_enabled": self.creative_orbit_animated.isChecked(),
+                 "follow_telemetry_colors": self.creative_follow_colors.isChecked()},
+            )
+            self._profile_store.update_creative_preset(
+                self._profiles, preset["id"], "telemetry_overlay",
+                {"enabled": self.creative_telemetry_enabled.isChecked()},
+            )
+        except ProfileStoreError as error:
+            self._message(str(error))
+        self._apply_creative_preset_ui()
+        self._render_creative_preview()
+
+    def _creative_color_requested(self, field: str) -> None:
+        preset = self._active_creative_preset()
+        current = preset["orbit_overlay"][field]
+        chosen = QColorDialog.getColor(QColor(current), self, "Orbit Color")
+        if not chosen.isValid():
+            return
+        try:
+            self._profile_store.update_creative_preset(
+                self._profiles, preset["id"], "orbit_overlay", {field: chosen.name().upper()}
+            )
+        except ProfileStoreError as error:
+            self._message(str(error))
+        self._apply_creative_preset_ui()
+        self._render_creative_preview()
 
     @Slot(object)
     def _apply_telemetry_snapshot(self, snapshot: TelemetrySnapshot) -> None:
@@ -493,7 +719,7 @@ class MainWindow(QMainWindow):
             self._telemetry_signature = signature
             self._rebuild_telemetry_groups()
         self._update_telemetry_controls()
-        self._render_orbit_preview()
+        self._render_dynamic_preview()
 
     def _clear_layout(self, layout: QVBoxLayout) -> None:
         while layout.count():
@@ -664,6 +890,96 @@ class MainWindow(QMainWindow):
             )
         return OrbitFrame(tuple(items), phase)
 
+    def _creative_items(self, presentations=None) -> tuple[OrbitItem, ...]:
+        selected = presentations if presentations is not None else self._telemetry_presentations.selected
+        readings = {
+            reading.sensor.sensor_id: reading
+            for reading in (self._telemetry_snapshot.readings if self._telemetry_snapshot else ())
+        }
+        return tuple(
+            OrbitItem(
+                item.display_label,
+                readings[item.sensor_id].value if item.sensor_id in readings else None,
+                item.font_color,
+                readings[item.sensor_id].availability.value if item.sensor_id in readings else "unavailable",
+            )
+            for item in selected[:2]
+        )
+
+    def _creative_composition(self, preset: dict, phase: float, presentations=None) -> CreativeComposition:
+        orbit = preset["orbit_overlay"]
+        telemetry = preset["telemetry_overlay"]
+        return CreativeComposition(
+            None, self._creative_items(presentations), telemetry["enabled"], orbit["enabled"],
+            orbit["animation_enabled"], orbit["follow_telemetry_colors"],
+            orbit["primary_color"], orbit["secondary_color"], phase,
+        )
+
+    def _creative_background(self, media: PreparedMedia | None, strategy: str, index: int = 0):
+        if media is None:
+            return None
+        if media.gif is not None:
+            return media.gif.render_frame(index, strategy)[0]
+        if media.static_jpeg is not None:
+            with Image.open(io.BytesIO(media.static_jpeg)) as image:
+                return image.convert("RGB").copy()
+        return None
+
+    @Slot()
+    def _render_dynamic_preview(self) -> None:
+        if self._profiles.active_profile_id == ProfileType.THERMALS.value:
+            self._render_orbit_preview()
+        elif self._profiles.active_profile_id == ProfileType.CREATIVE.value:
+            self._render_creative_preview()
+
+    def _render_creative_preview(self) -> None:
+        if self._profiles.active_profile_id != ProfileType.CREATIVE.value:
+            return
+        preset = self._active_creative_preset()
+        media = self._creative_media.get(preset["id"])
+        elapsed = max(0.0, time.monotonic() - self._creative_preview_started)
+        index = 0
+        if media is not None and media.gif is not None:
+            position = int(elapsed * 1000) % media.gif.duration_ms
+            total = 0
+            for candidate, duration in enumerate(media.gif.durations_ms):
+                total += duration
+                if position < total:
+                    index = candidate
+                    break
+        phase = phase_at(time.monotonic(), self._creative_preview_started)
+        try:
+            background = self._creative_background(
+                media, preset["background"]["resize_strategy"], index
+            )
+            jpeg = compose_creative_jpeg(
+                CreativeComposition(
+                    background,
+                    self._creative_items(),
+                    preset["telemetry_overlay"]["enabled"],
+                    preset["orbit_overlay"]["enabled"],
+                    preset["orbit_overlay"]["animation_enabled"],
+                    preset["orbit_overlay"]["follow_telemetry_colors"],
+                    preset["orbit_overlay"]["primary_color"],
+                    preset["orbit_overlay"]["secondary_color"],
+                    phase,
+                )
+            )
+        except (ImageProcessingError, ValueError) as error:
+            self.preview.setText("Creative preview unavailable")
+            self._message(str(error))
+            return
+        pixmap = QPixmap()
+        pixmap.loadFromData(jpeg, "JPEG")
+        self.preview.setPixmap(pixmap.scaled(330, 330, Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation))
+        layers = ["Background" if media else "Black background"]
+        if preset["orbit_overlay"]["enabled"]:
+            layers.append("Orbit")
+        if preset["telemetry_overlay"]["enabled"]:
+            layers.append("Telemetry")
+        self.preview_caption.setText("CREATIVE  •  " + " + ".join(layers) + "  •  480 × 480")
+
     @Slot()
     def _render_orbit_preview(self) -> None:
         if self._profiles.active_profile_id != ProfileType.THERMALS.value:
@@ -709,7 +1025,7 @@ class MainWindow(QMainWindow):
         self.select_button.setVisible(media_mode)
         self.gif_search_button.setVisible(gif_mode)
         self.mode_combo.setVisible(media_mode)
-        self.send_button.setVisible(media_mode or active is ProfileType.THERMALS)
+        self.send_button.setVisible(media_mode or active in {ProfileType.THERMALS, ProfileType.CREATIVE})
         creative_mode = active is ProfileType.CREATIVE
         self.mode_placeholder.setVisible(False)
         self.thermals_panel.setVisible(active is ProfileType.THERMALS)
@@ -722,7 +1038,9 @@ class MainWindow(QMainWindow):
             self.send_button.setText("Send Thermals to LCD")
             self._render_orbit_preview()
         if creative_mode:
+            self.send_button.setText("Send Creative to LCD")
             self._apply_creative_preset_ui()
+            self._render_creative_preview()
         if media_mode:
             strategy = self._profiles.profile(active.value).settings["resize_strategy"]
             combo_index = self.mode_combo.findData(strategy)
@@ -770,6 +1088,18 @@ class MainWindow(QMainWindow):
                 and self._identity is not None
                 and bool(self._telemetry_presentations.selected)
             )
+        elif self._profiles.active_profile_id == ProfileType.CREATIVE.value:
+            preset = self._active_creative_preset()
+            has_content = (
+                preset["id"] in self._creative_media
+                or preset["orbit_overlay"]["enabled"]
+                or (preset["telemetry_overlay"]["enabled"] and bool(self._telemetry_presentations.selected))
+            )
+            self.send_button.setText("Send Creative to LCD")
+            self.send_button.setEnabled(
+                state in {AppState.READY, AppState.DISPLAYING}
+                and self._identity is not None and has_content
+            )
         else:
             self.send_button.setText("Send to LCD")
         self.restore_button.setEnabled(policy.restore)
@@ -782,6 +1112,8 @@ class MainWindow(QMainWindow):
             return "GIF playing"
         if self._orbit_playback.active:
             return "Thermals playing"
+        if self._creative_playback.active:
+            return "Creative playing"
         if self._refresher.active or self._state is AppState.SENDING:
             return "Static image"
         if self._state is AppState.RESTORING:
@@ -800,6 +1132,7 @@ class MainWindow(QMainWindow):
             self._refresher.stop()
             self._gif_playback.stop()
             self._orbit_playback.stop()
+            self._creative_playback.stop()
             self._identity = None
             self.device_name.setText("Nautilus LCD Cap")
             self.device_vid.setText("VID:PID —")
@@ -822,7 +1155,8 @@ class MainWindow(QMainWindow):
             self.device_firmware.setText("Firmware reading…")
             self.configure_backend.emit(identity)
         else:
-            active = self._refresher.active or self._gif_playback.active or self._orbit_playback.active
+            active = (self._refresher.active or self._gif_playback.active
+                      or self._orbit_playback.active or self._creative_playback.active)
             self._set_state(AppState.DISPLAYING if active else AppState.READY)
 
     @Slot()
@@ -843,6 +1177,10 @@ class MainWindow(QMainWindow):
         self._refresher.stop()
         self._gif_playback.stop()
         self._orbit_playback.stop()
+        self._creative_playback.stop()
+        self._creative_lcd_preset = None
+        self._creative_lcd_media = None
+        self._creative_lcd_presentations = ()
         self._initial_send_jpeg = None
         self._set_state(AppState.ERROR)
         self._message(f"{action.capitalize()} failed: {message}")
@@ -995,6 +1333,7 @@ class MainWindow(QMainWindow):
                 return
             self._refresher.stop()
             self._gif_playback.stop()
+            self._creative_playback.stop()
             self._session_touched_display = True
             self._set_state(AppState.SENDING)
             self._message("Starting volatile Orbit thermals…")
@@ -1002,11 +1341,53 @@ class MainWindow(QMainWindow):
             self._orbit_measurement_started = time.monotonic()
             self._orbit_playback.start()
             return
+        if active is ProfileType.CREATIVE:
+            if self._identity is None:
+                return
+            preset = deepcopy(self._active_creative_preset())
+            media = self._creative_media.get(preset["id"])
+            if (media is None and not preset["orbit_overlay"]["enabled"]
+                    and not preset["telemetry_overlay"]["enabled"]):
+                return
+            self._refresher.stop()
+            self._gif_playback.stop()
+            self._orbit_playback.stop()
+            self._creative_playback.stop()
+            self._creative_lcd_preset = preset
+            self._creative_lcd_media = media
+            self._creative_lcd_presentations = tuple(deepcopy(self._telemetry_presentations.selected))
+            self._creative_measurements = []
+            self._creative_measurement_started = time.monotonic()
+            self._session_touched_display = True
+            self._set_state(AppState.SENDING)
+            dynamic = bool(media and media.animated) or (
+                preset["orbit_overlay"]["enabled"]
+                and preset["orbit_overlay"]["animation_enabled"]
+            ) or preset["telemetry_overlay"]["enabled"]
+            if dynamic:
+                self._message("Starting volatile Creative playback…")
+                self._creative_playback.start(
+                    media.gif if media else None,
+                    orbit_animated=(preset["orbit_overlay"]["enabled"]
+                                    and preset["orbit_overlay"]["animation_enabled"]),
+                    telemetry_enabled=preset["telemetry_overlay"]["enabled"],
+                )
+                return
+            background = self._creative_background(
+                media, preset["background"]["resize_strategy"]
+            )
+            jpeg = compose_creative_jpeg(
+                replace(self._creative_composition(preset, 0.0), background=background)
+            )
+            self._initial_send_jpeg = jpeg
+            self.send_requested.emit(jpeg)
+            return
         if self._selected_media is None or self._prepared_jpeg is None or self._identity is None:
             return
         self._refresher.stop()
         self._gif_playback.stop()
         self._orbit_playback.stop()
+        self._creative_playback.stop()
         if self._selected_media.animated and self._selected_media.gif is not None:
             self._lcd_gif = self._selected_media.gif
             self._lcd_strategy = str(self.mode_combo.currentData())
@@ -1080,6 +1461,61 @@ class MainWindow(QMainWindow):
                 f"coalesced {self._orbit_playback.dropped_frames}"
             )
 
+    @Slot(float, int)
+    def _queue_creative_frame(self, phase: float, gif_index: int) -> None:
+        preset = self._creative_lcd_preset
+        if preset is None:
+            self._creative_playback.stop()
+            return
+        media = self._creative_lcd_media
+        static_background = None
+        gif_document = media.gif if media and media.gif else None
+        if media is not None and gif_document is None:
+            static_background = self._creative_background(
+                media, preset["background"]["resize_strategy"]
+            )
+        self.creative_frame_requested.emit(
+            CreativeFrameRequest(
+                self._creative_composition(preset, phase, self._creative_lcd_presentations), static_background,
+                gif_document, gif_index, preset["background"]["resize_strategy"],
+            )
+        )
+
+    @Slot(object)
+    def _creative_frame_sent(self, stats: OrbitTransferStats) -> None:
+        first = self._state is AppState.SENDING
+        self._creative_playback.transfer_completed()
+        self._creative_measurements.append(stats)
+        self._set_state(AppState.DISPLAYING)
+        if first:
+            self._message(
+                f"Creative playback started ({stats.report_count} reports, "
+                f"{stats.total_seconds * 1000:.1f} ms)"
+            )
+
+    def _report_creative_measurements(self) -> None:
+        measurements = self._creative_measurements
+        if not measurements:
+            return
+        elapsed = max(time.monotonic() - self._creative_measurement_started, 0.001)
+
+        def summary(field: str, scale: float = 1.0) -> str:
+            values = [getattr(item, field) * scale for item in measurements]
+            return f"{min(values):.1f}/{sum(values) / len(values):.1f}/{max(values):.1f}"
+
+        report_counts = [item.report_count for item in measurements]
+        self._message(
+            f"Creative validation: {len(measurements) / elapsed:.2f} FPS; "
+            f"render min/avg/max {summary('render_seconds', 1000)} ms; "
+            f"JPEG {summary('encode_seconds', 1000)} ms, "
+            f"{summary('jpeg_bytes', 1 / 1024)} KiB; "
+            f"HID {summary('transfer_seconds', 1000)} ms; "
+            f"generation-to-send {summary('total_seconds', 1000)} ms; "
+            f"reports {min(report_counts)}/{sum(report_counts) / len(report_counts):.1f}/"
+            f"{max(report_counts)}; frames {len(measurements)}; "
+            f"coalesced {self._creative_playback.dropped_frames}"
+        )
+
     @Slot(int)
     def _image_refreshed(self, _report_count: int) -> None:
         self._refresher.transfer_completed()
@@ -1091,6 +1527,11 @@ class MainWindow(QMainWindow):
         self._refresher.stop()
         self._gif_playback.stop()
         self._orbit_playback.stop()
+        self._report_creative_measurements()
+        self._creative_playback.stop()
+        self._creative_lcd_preset = None
+        self._creative_lcd_media = None
+        self._creative_lcd_presentations = ()
         self._lcd_gif = None
         self._initial_send_jpeg = None
         self._set_state(AppState.RESTORING)
@@ -1123,6 +1564,10 @@ class MainWindow(QMainWindow):
         self._refresher.stop()
         self._gif_playback.stop()
         self._orbit_playback.stop()
+        self._creative_playback.stop()
+        self._creative_lcd_preset = None
+        self._creative_lcd_media = None
+        self._creative_lcd_presentations = ()
         self._lcd_gif = None
         self._initial_send_jpeg = None
         if self._search_dialog is not None:
@@ -1158,6 +1603,10 @@ class MainWindow(QMainWindow):
         self._refresher.stop()
         self._gif_playback.stop()
         self._orbit_playback.stop()
+        self._creative_playback.stop()
+        self._creative_lcd_preset = None
+        self._creative_lcd_media = None
+        self._creative_lcd_presentations = ()
         self._lcd_gif = None
         self._initial_send_jpeg = None
         if self._session_touched_display and self._identity is not None:

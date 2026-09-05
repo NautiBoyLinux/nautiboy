@@ -96,3 +96,18 @@ class ProfileStore:
         settings = state.profile(ProfileType.CREATIVE.value).settings
         next(preset for preset in settings["presets"] if preset["id"] == identifier)["name"] = cleaned
         self.save(state)
+
+    def update_creative_preset(
+        self, state: ProfileState, identifier: str, section: str, values: dict[str, object]
+    ) -> None:
+        if identifier not in CREATIVE_PRESET_IDS:
+            raise ValueError(f"unknown Creative preset: {identifier}")
+        if section not in {"background", "orbit_overlay", "telemetry_overlay"}:
+            raise ValueError(f"unsupported Creative section: {section}")
+        settings = state.profile(ProfileType.CREATIVE.value).settings
+        preset = next(item for item in settings["presets"] if item["id"] == identifier)
+        preset[section].update(values)
+        # Round-trip through normalization before writing malformed UI state.
+        normalized = profile_state_from_dict(state.to_dict())
+        state.profiles = normalized.profiles
+        self.save(state)

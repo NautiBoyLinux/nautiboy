@@ -79,9 +79,9 @@ def _rgba(hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
 
 
 @lru_cache(maxsize=1)
-def _static_background() -> Image.Image:
-    """Cache all geometry that does not change with phase or telemetry."""
-    image = Image.new("RGBA", (DISPLAY_WIDTH, DISPLAY_HEIGHT), BACKGROUND + (255,))
+def _static_geometry() -> Image.Image:
+    """Cache transparent geometry shared by Thermals and Creative."""
+    image = Image.new("RGBA", (DISPLAY_WIDTH, DISPLAY_HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     center = DISPLAY_WIDTH // 2
     for radius, color, width in (
@@ -104,6 +104,12 @@ def _static_background() -> Image.Image:
     for start, end in ((198, 248), (275, 309), (332, 357), (30, 68), (101, 145)):
         draw.arc(detail_box, start=start, end=end, fill=(26, 34, 66, 255), width=2)
     return image
+
+
+@lru_cache(maxsize=1)
+def _static_background() -> Image.Image:
+    image = Image.new("RGBA", (DISPLAY_WIDTH, DISPLAY_HEIGHT), BACKGROUND + (255,))
+    return Image.alpha_composite(image, _static_geometry())
 
 
 @lru_cache(maxsize=1)
@@ -138,8 +144,21 @@ def _centered(draw: ImageDraw.ImageDraw, text: str, center_y: int, font, fill) -
     draw.text(((DISPLAY_WIDTH-width)/2-box[0], center_y-height/2-box[1]), text, font=font, fill=fill)
 
 
-def _draw_dynamic_arcs(image: Image.Image, frame: OrbitFrame) -> Image.Image:
-    phase_degrees = (frame.phase % 1.0) * 360.0
+def apply_orbit_perimeter(
+    image: Image.Image,
+    colors: tuple[str, ...],
+    phase: float,
+    *,
+    animated: bool = True,
+    include_guides: bool = True,
+) -> Image.Image:
+    """Composite the reusable Orbit perimeter over any 480x480 background."""
+    if not 1 <= len(colors) <= 2:
+        raise ValueError("Orbit perimeter requires one or two colors")
+    image = image.convert("RGBA")
+    if include_guides:
+        image = Image.alpha_composite(image, _static_geometry())
+    phase_degrees = ((phase if animated else 0.0) % 1.0) * 360.0
     glow = Image.new("RGBA", image.size, (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow)
     core = Image.new("RGBA", image.size, (0, 0, 0, 0))
@@ -149,10 +168,10 @@ def _draw_dynamic_arcs(image: Image.Image, frame: OrbitFrame) -> Image.Image:
         ((103, 45), (166, 24), (216, 39), (278, 19), (321, 44)),
     )
     boxes = ((15, 15, 465, 465), (23, 23, 457, 457))
-    for index, item in enumerate(frame.items):
-        segments = segment_sets[index if len(frame.items) == 2 else 0]
-        color, glow_color = _rgba(item.color), _rgba(item.color, 115)
-        box = boxes[index if len(frame.items) == 2 else 0]
+    for index, selected_color in enumerate(colors):
+        segments = segment_sets[index if len(colors) == 2 else 0]
+        color, glow_color = _rgba(selected_color), _rgba(selected_color, 115)
+        box = boxes[index if len(colors) == 2 else 0]
         for offset, length in segments:
             start = phase_degrees + offset
             glow_draw.arc(box, start=start, end=start+length, fill=glow_color, width=9)
@@ -165,7 +184,7 @@ def _draw_dynamic_arcs(image: Image.Image, frame: OrbitFrame) -> Image.Image:
         reverse_phase = -phase_degrees * 0.62
         for offset, length in ((-54 + index * 113, 29), (78 + index * 97, 18), (181 + index * 73, 34)):
             start = reverse_phase + offset
-            core_draw.arc(secondary_box, start=start, end=start+length, fill=_rgba(item.color, 165), width=3)
+            core_draw.arc(secondary_box, start=start, end=start+length, fill=_rgba(selected_color, 165), width=3)
     image = Image.alpha_composite(image, glow.filter(ImageFilter.GaussianBlur(2.2)))
     return Image.alpha_composite(image, core)
 
@@ -204,18 +223,36 @@ def _draw_reading(image: Image.Image, item: OrbitItem, label_y: int, value_y: in
         _centered(draw, item.availability.upper(), status_y, _font(12, True), STATUS_COLOR)
 
 
-def render_orbit(frame: OrbitFrame) -> Image.Image:
-    if not 1 <= len(frame.items) <= 2:
-        raise ValueError("Orbit requires one or two telemetry items")
-    image = _draw_dynamic_arcs(_static_background().copy(), frame)
-    if len(frame.items) == 1:
+def apply_telemetry_foreground(
+    image: Image.Image,
+    items: tuple[OrbitItem, ...],
+    *,
+    branded_divider: bool = False,
+) -> Image.Image:
+    """Draw readable telemetry last, above any media and perimeter overlay."""
+    if not 1 <= len(items) <= 2:
+        raise ValueError("telemetry foreground requires one or two items")
+    image = image.convert("RGBA")
+    if len(items) == 1:
         placements, value_size, divider_y = ((148, 220, 283),), 96, 334
     else:
         placements, value_size, divider_y = ((89, 151, 205), (287, 349, 403)), 91, 240
-    _draw_divider(image, frame, divider_y)
-    for item, (label_y, value_y, status_y) in zip(frame.items, placements):
+    if branded_divider:
+        _draw_divider(image, OrbitFrame(items, 0.0), divider_y)
+    for item, (label_y, value_y, status_y) in zip(items, placements):
         _draw_reading(image, item, label_y, value_y, status_y, value_size)
     return image.convert("RGB")
+
+
+def render_orbit(frame: OrbitFrame) -> Image.Image:
+    if not 1 <= len(frame.items) <= 2:
+        raise ValueError("Orbit requires one or two telemetry items")
+    image = apply_orbit_perimeter(
+        Image.new("RGB", (DISPLAY_WIDTH, DISPLAY_HEIGHT), BACKGROUND),
+        tuple(item.color for item in frame.items),
+        frame.phase,
+    )
+    return apply_telemetry_foreground(image, frame.items, branded_divider=True)
 
 
 def encode_orbit_jpeg(image: Image.Image) -> bytes:

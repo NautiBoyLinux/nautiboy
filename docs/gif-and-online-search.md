@@ -20,8 +20,14 @@ are cancellable, require HTTPS and expected content types, and enforce response
 size limits.
 
 GIPHY results remain in memory for the session and are never placed in the XDG
-media cache. Attribution remains visible in the search interface. Production
-distribution is deferred until external-LCD attribution policy is clarified.
+media cache. Attribution remains visible in the search interface. The remaining
+public-release gate is an acceptable production credential/distribution model
+for an open-source Linux desktop application, together with confirmed licensing,
+attribution, and external-LCD-use terms. No personal or beta API key may be
+embedded in source, packages, or application defaults. Credential resolution
+remains, in order: the process-only `NAUTIBOY_GIPHY_API_KEY` override, the
+desktop keyring, then unconfigured. A proxy or hosted backend is not part of
+this milestone and must not be introduced without a separate design decision.
 
 Current provider references:
 

@@ -38,7 +38,10 @@ def test_default_schema_has_approved_independent_settings() -> None:
         "Preset 1", "Preset 2", "Preset 3", "Preset 4"
     ]
     for preset in creative["presets"]:
-        assert preset["background"] == {"media_kind": None, "resize_strategy": "fit"}
+        assert preset["background"] == {
+            "media_kind": None, "source_path": None, "resize_strategy": "fit"
+        }
+        assert preset["orbit_overlay"]["enabled"] is False
         assert preset["telemetry_overlay"] == {
             "enabled": False, "fields": [], "layout": {}, "style": {}
         }

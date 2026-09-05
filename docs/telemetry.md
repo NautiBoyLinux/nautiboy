@@ -101,3 +101,25 @@ frame took 38.5 ms generation-to-send; subsequent component averages total
 about 37.6 ms, leaving ample headroom inside the 100 ms scheduler interval.
 No short write, disconnect, device mismatch, fallback, or backend error was
 observed.
+
+## Creative physical validation
+
+The full Creative stack was physically validated on the same hardware-tested
+CORSAIR Nautilus LCD Cap (`1b1c:0c57`, interface 0, firmware `0.3.0.5`) on
+Fedora KDE Plasma 44. The controlled workload combined an animated GIPHY
+background, animated Orbit perimeter, two live temperature readings, and Orbit
+colors derived from those telemetry selections. The first completed composite
+frame was 103 HID reports and took 56.9 ms generation-to-send.
+
+The background GIF and Orbit both animated correctly while the two live values
+remained readable above both lower layers. The perimeter stayed within its
+intended circular boundary. No visible flicker, corruption, fallback,
+disconnect, short write, or rendering defect was observed. Restore stopped the
+Creative scheduler first and the existing stored iCUE GIF resumed through the
+unchanged hardware-mode restoration path. Persistent LCD storage was not read
+or modified.
+
+Only the first-frame timing was retained in the UI details copied from this
+run, so aggregate min/average/max performance values are intentionally not
+claimed here. The application now retains bounded per-session measurements and
+emits their aggregate summary when a subsequent Creative run is restored.

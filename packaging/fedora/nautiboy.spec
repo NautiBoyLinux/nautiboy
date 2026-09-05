@@ -2,7 +2,7 @@
 
 Name:           nautiboy
 Version:        0.2.0~dev0
-Release:        11%{?dist}
+Release:        15%{?dist}
 Summary:        Linux controller for Corsair NAUTILUS RS LCD displays
 
 License:        GPL-3.0-or-later
@@ -67,6 +67,18 @@ appstreamcli validate --no-net packaging/io.github.nautiboy.nautiboy.metainfo.xm
 %{_udevrulesdir}/70-nautilus-lcd.rules
 
 %changelog
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-15
+- Record successful physical Creative compositing validation
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-14
+- Add Creative validation metrics and approved scrollable 760x960 interface
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-13
+- Reuse experimental GIPHY search for Creative backgrounds
+
+* Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-12
+- Add Creative background, Orbit, and telemetry compositing preview
+
 * Fri Sep 04 2026 Andrew Tyler <apaultyler92@gmail.com> - 0.2.0~dev0-11
 - Match the refined Orbit reference with larger type, layered arcs, and mascot divider
 

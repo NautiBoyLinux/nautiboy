@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 from PySide6.QtCore import QObject, Signal, Slot
 
 from nautiboy.backends.direct_hidraw import DirectNautilusBackend
+from nautiboy.creative import CreativeFrameRequest, compose_creative
+from nautiboy.imaging.processor import encode_baseline_jpeg
 from nautiboy.device.identity import DeviceIdentity
 from nautiboy.telemetry.orbit import OrbitTransferStats, encode_orbit_jpeg, render_orbit
 
@@ -18,6 +21,7 @@ class DeviceWorker(QObject):
     image_refreshed = Signal(int)
     gif_frame_sent = Signal(int, int, float)
     orbit_frame_sent = Signal(object)
+    creative_frame_sent = Signal(object)
     restored = Signal()
     failed = Signal(str, str)
 
@@ -88,6 +92,30 @@ class DeviceWorker(QObject):
             )
         except Exception as error:
             self.failed.emit("thermals", str(error))
+
+    @Slot(object)
+    def send_creative_frame(self, request: CreativeFrameRequest) -> None:
+        try:
+            started = time.monotonic()
+            background = request.static_background
+            if request.gif_document is not None:
+                background, _jpeg = request.gif_document.render_frame(
+                    request.gif_frame_index, request.resize_strategy
+                )
+            rendered = compose_creative(replace(request.composition, background=background))
+            rendered_at = time.monotonic()
+            jpeg = encode_baseline_jpeg(rendered)
+            encoded_at = time.monotonic()
+            reports = self._required_backend().send_static_image(jpeg)
+            finished = time.monotonic()
+            self.creative_frame_sent.emit(
+                OrbitTransferStats(
+                    reports, len(jpeg), rendered_at - started,
+                    encoded_at - rendered_at, finished - encoded_at, finished - started,
+                )
+            )
+        except Exception as error:
+            self.failed.emit("creative", str(error))
 
     @Slot()
     def restore(self) -> None:

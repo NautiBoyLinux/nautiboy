@@ -27,23 +27,29 @@ loaded into Preset 1. A document from a newer schema is not overwritten.
 Changing modes or selecting/renaming Creative presets never sends to the device,
 enters software mode, stops an active LCD scheduler, restores hardware mode, or
 changes the current LCD content.
-Selected media paths, GIPHY URLs, and downloaded media are not persisted.
+Creative presets persist only a local media path and safe display settings; media
+bytes are never stored in profiles.json. Online GIPHY media remains session-only.
 
-## Planned Creative Orbit overlay
+## Creative compositor milestone
 
-Each Creative preset will eventually be able to place the approved moving Orbit
-ring effect around its JPEG or GIF background. This is a documented design
-requirement only; Creative compositing is not implemented yet.
+Each Creative preset can place the approved moving Orbit ring effect around its
+JPEG, PNG, or GIF background and optionally draw the globally selected telemetry
+items above it. The preview and device worker use the same compositor.
+Local media and the existing experimental GIPHY search are available directly
+from the Background section. GIPHY selections remain in memory for the current
+session and are never written to the profile file or persistent media cache.
 
-The future rendering order is:
+The fixed rendering order is:
 
 1. user-selected JPEG/GIF background
 2. optional animated Orbit perimeter overlay
 3. telemetry foreground
 
-The overlay defaults to **off**. Per preset, its planned settings are enabled,
+The overlay defaults to **off**. Per-preset settings include enabled,
 primary color, secondary color, whether colors follow selected telemetry, and
 whether animation is enabled. Rings remain confined to the outer perimeter and
 frame rather than obscure the background. Telemetry stays above both layers.
-The implementation should reuse the validated Orbit timing and geometry where
-practical and must not add a separate HID protocol or transport path.
+The compositor reuses the validated Orbit timing and geometry and knows nothing
+about HID. Dynamic playback is latest-state-wins with one transfer in flight and
+a 10 FPS ceiling; telemetry-only compositions update at 1 Hz. Static-only
+compositions use the existing 1,000 ms keepalive refresher.

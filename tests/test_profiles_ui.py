@@ -43,7 +43,7 @@ def test_mode_specific_controls_and_placeholders(monkeypatch, tmp_path: Path) ->
         assert not window.restore_button.isHidden()
         window._switch_profile("creative")
         assert not window.creative_panel.isHidden()
-        assert "background media" in window.creative_placeholder.text()
+        assert not window.creative_select_button.isHidden()
         assert not window.restore_button.isHidden()
     finally:
         window.close()

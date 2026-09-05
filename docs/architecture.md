@@ -57,21 +57,27 @@ selection and Image/GIF resize strategies persist in
 `$XDG_CONFIG_HOME/nautiboy/profiles.json`. Switching modes changes UI state
 only: it does not emit a device operation, stop active playback, or alter the
 LCD. Thermals now uses the read-only Linux telemetry subsystem and the
-programmatic Orbit renderer. Creative remains a schema/UI foundation without
-compositing in this phase. Creative contains four stable, independently stored
+programmatic Orbit renderer. Creative contains four stable, independently stored
 sub-presets; their active selection and renameable display names persist while
-their background and telemetry-overlay namespaces reserve future editor state.
+their background, Orbit, and telemetry-overlay settings remain independent.
 
 Telemetry hardware identity is separate from future user presentation state.
 Versioned presentation settings live in a separate atomic per-user
 `telemetry.json` file keyed by deterministic sensor ID. A strict maximum of two
 enabled items is enforced independently of the UI.
-Future Creative compositing has a fixed visual order: JPEG/GIF media background,
+Creative compositing has a fixed visual order: JPEG/PNG/GIF media background,
 optional animated Orbit perimeter overlay, then telemetry foreground. The
 background remains visually dominant, while telemetry always stays above it.
 Orbit is a framing effect confined to the perimeter and must never cover text.
 It reuses the existing programmatic Orbit geometry/timing and introduces no new
 HID behavior.
+
+The pure compositor is separate from media decoding and device I/O. Its output
+is a bounded 480×480 RGB image. The worker uses the already validated static
+JPEG transport, while a bounded scheduler combines independent GIF deadlines,
+Orbit phase, and approximately 1 Hz telemetry snapshots without queuing stale
+frames or allowing concurrent transfers. Merely previewing or browsing profiles
+and presets performs no HID operation.
 
 Online search is not a prerequisite for local media. GIPHY downloads live only
 for the current session because standard GIPHY integrations may not persistently

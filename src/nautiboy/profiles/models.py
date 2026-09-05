@@ -33,7 +33,18 @@ def default_creative_preset(identifier: str) -> dict[str, Any]:
     return {
         "id": identifier,
         "name": f"Preset {number}",
-        "background": {"media_kind": None, "resize_strategy": "fit"},
+        "background": {
+            "media_kind": None,
+            "source_path": None,
+            "resize_strategy": "fit",
+        },
+        "orbit_overlay": {
+            "enabled": False,
+            "animation_enabled": True,
+            "follow_telemetry_colors": True,
+            "primary_color": "#9B30FF",
+            "secondary_color": "#00D9FF",
+        },
         "telemetry_overlay": {
             "enabled": False,
             "fields": [],
@@ -92,6 +103,8 @@ def _creative_preset(identifier: str, supplied: object) -> dict[str, Any]:
     background = preset["background"]
     if background.get("media_kind") not in {None, "image", "gif"}:
         background["media_kind"] = None
+    if not isinstance(background.get("source_path"), str) or not background["source_path"].strip():
+        background["source_path"] = None
     if background.get("resize_strategy") not in {"fit", "center-crop"}:
         background["resize_strategy"] = "fit"
     overlay = preset["telemetry_overlay"]
@@ -102,6 +115,25 @@ def _creative_preset(identifier: str, supplied: object) -> dict[str, Any]:
     for key in ("layout", "style"):
         if not isinstance(overlay.get(key), dict):
             overlay[key] = {}
+    orbit = preset["orbit_overlay"]
+    for key, default in (
+        ("enabled", False),
+        ("animation_enabled", True),
+        ("follow_telemetry_colors", True),
+    ):
+        if not isinstance(orbit.get(key), bool):
+            orbit[key] = default
+    for key, default in (("primary_color", "#9B30FF"), ("secondary_color", "#00D9FF")):
+        value = orbit.get(key)
+        if not isinstance(value, str) or len(value) != 7 or value[0] != "#":
+            orbit[key] = default
+            continue
+        try:
+            int(value[1:], 16)
+        except ValueError:
+            orbit[key] = default
+        else:
+            orbit[key] = value.upper()
     return preset
 
 
