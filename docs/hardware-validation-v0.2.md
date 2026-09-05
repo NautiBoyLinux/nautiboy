@@ -1,4 +1,9 @@
-# NautiBoy v0.2 hardware validation
+# Historical v0.2 development hardware validation
+
+This record preserves the staged development validation that led to the
+`v0.4.0-beta.1` release candidate. Package names and test counts below identify
+the exact artifacts tested at each milestone; they are not current release
+version claims.
 
 ## Local GIF test 1 — passed
 

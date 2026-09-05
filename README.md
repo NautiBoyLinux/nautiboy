@@ -1,206 +1,184 @@
 # NautiBoy
 
-NautiBoy is an open-source Linux controller for Corsair NAUTILUS RS LCD displays.
+NautiBoy is an unofficial, open-source Linux controller for the Corsair
+Nautilus LCD Cap.
 
 ![NautiBoy logo](artwork/masters/nautiboy-logo-1024.png)
 
-The v0.2 development branch extends the hardware-validated v0.1 static-image
-interface with bounded local GIF playback. Local JPEG, PNG, and GIF support has
-no network or provider dependency. The controller's existing hardware-mode
-content is restored when the application exits.
+The `v0.4.0-beta.1` release candidate supports local media, animated displays,
+read-only temperature telemetry, and layered Creative compositions. It uses
+volatile LCD control only: the controller's existing hardware/iCUE content is
+restored on request and during a safe application shutdown.
 
-NautiBoy is an unofficial community project and is not affiliated with, endorsed
-by, or supported by Corsair.
-
-## Features
-
-- Automatic supported-device discovery through udev and sysfs
-- Firmware version display
-- Local JPEG, PNG, and animated GIF input
-- JPEG/PNG EXIF orientation support
-- Fit and Center Crop processing to 480×480
-- Static and animated local preview with media metadata
-- Optional provider-neutral online GIF browser
-- Bounded 1,000 ms volatile refresh with no overlapping transfers
-- Manual and automatic hardware-mode restoration
-- KDE/Linux system tray with background playback, Restore, and safe Quit
-- Per-user single-instance activation through a Qt local socket
-- Optional per-user XDG login startup, hidden to tray by default
-- Opt-in one-shot resume of the last successfully active display after safe
-  device validation
-- Four persistent functional modes and four renameable Creative sub-presets
-- Read-only Linux temperature discovery and two-item Thermals configuration
-- Normal-user operation through a narrowly scoped `uaccess` rule
+NautiBoy is not affiliated with, endorsed by, or supported by Corsair.
 
 ## Hardware support
 
-Confirmed hardware-tested configuration:
+The deliberately narrow supported and physically tested configuration is:
 
-| Device | VID:PID | Interface | Firmware | Operating system |
+| Device | VID:PID | Interface | Firmware | Tested platform |
 |---|---|---:|---|---|
 | CORSAIR Nautilus LCD Cap | `1b1c:0c57` | 0 | `0.3.0.5` | Fedora KDE Plasma 44 |
 
-Other Linux distributions, other Nautilus LCD firmware versions, and other
-Corsair LCD products are currently unverified. Device acceptance is intentionally
-restricted to the tested VID, PID, and interface.
+Other distributions, firmware versions, and Corsair LCD products are currently unverified.
+NautiBoy will not accept a different VID, PID, or USB interface.
 
-See [the hardware-validation record](docs/HARDWARE-VALIDATION.md) for the test
-procedure and results.
+## Features
 
-Both local-GIF v0.2 hardware validations and the incidental experimental GIPHY
-hardware result are recorded separately in
-[docs/hardware-validation-v0.2.md](docs/hardware-validation-v0.2.md).
-The same record covers the 153-test software suite, RPM `%check`, normal-user
-udev access, Fedora RPM installation and uninstall/reinstall lifecycle, and the
-successful post-reinstall static-image hardware regression. Persistent LCD
-storage was never accessed or modified.
+- **Thermals:** up to two discovered Linux temperature sensors rendered with
+  the animated Orbit display
+- **Image:** local JPEG and PNG with EXIF orientation, Fit, and Center Crop
+- **GIF:** bounded local animated GIF playback
+- **Creative:** four persistent, renameable presets combining JPEG/PNG/GIF
+  backgrounds, optional Orbit animation, and foreground telemetry
+- Animated previews and safe, serialized LCD transfers with no unbounded queue
+- Optional experimental GIPHY search using a user-provided API key
+- Persistence for explicitly selected GIPHY media; search results stay transient
+- KDE/Linux tray operation, single-instance activation, and optional per-user
+  autostart
+- Opt-in **Resume last display on launch**, using the last successfully sent
+  snapshot rather than a newer unsent selection
+- Manual restore and safe quit-time restoration of stored hardware/iCUE content
+- Normal-user device access through one narrowly scoped udev rule
 
-## Source installation
+## Install on Fedora
 
-Requirements:
+Download the release RPM for `v0.4.0-beta.1`, verify its published checksum,
+then install it from a normal terminal:
 
-- Linux with hidraw, udev, and systemd-logind `uaccess` support
-- Python 3.11 or newer
-- PySide6, Pillow, and pyudev
+```bash
+sudo dnf install ./nautiboy-0.4.0~beta.1-1.fc44.noarch.rpm
+```
 
-From an extracted source release or local checkout:
+Reconnect the Nautilus LCD USB connection, log out and back in, or reboot so
+udev and the desktop session can apply normal-user access. Launch **NautiBoy**
+from the application menu. Do not run the GUI with `sudo`.
+
+The RPM installs the application, desktop/AppStream metadata, hicolor icons,
+and this exact rule:
+
+```udev
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1b1c", ATTRS{idProduct}=="0c57", TAG+="uaccess"
+```
+
+## Source/development installation
+
+NautiBoy requires Python 3.11 or newer, PySide6, Pillow, pyudev, and keyring.
+From an extracted source archive or checkout:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install .
-```
-
-Install the narrowly scoped device-access rule:
-
-```bash
-sudo install -m 0644 packaging/70-nautilus-lcd.rules /etc/udev/rules.d/70-nautilus-lcd.rules
-sudo udevadm control --reload-rules
-```
-
-Reconnect the LCD USB device or reboot so udev and logind apply the rule. Then
-run NautiBoy as the normal desktop user:
-
-```bash
 .venv/bin/nautiboy
 ```
 
-Do not run the GUI with `sudo`. Detailed rule verification and removal guidance
-is in [docs/permissions.md](docs/permissions.md).
+For source installs, install `packaging/70-nautilus-lcd.rules` separately as
+described in [the permissions guide](docs/permissions.md).
 
-## Removal
+## Optional GIPHY search
 
-1. Close NautiBoy normally so hardware mode is restored.
-2. Remove the source checkout or virtual environment when no longer needed.
-3. If no longer using NautiBoy, remove its udev rule:
+Local GIF playback is independent of GIPHY. To use the experimental provider,
+open **Settings → GIPHY**, enter your own API key, and save it to the desktop
+Secret Service/keyring. The masked field never reads the key back. A process-only
+`NAUTIBOY_GIPHY_API_KEY` value takes precedence for development use.
 
-   ```bash
-   sudo rm /etc/udev/rules.d/70-nautilus-lcd.rules
-   sudo udevadm control --reload-rules
-   ```
+GIPHY is unconfigured by default. No key is embedded in NautiBoy or written to
+settings, logs, selected-media metadata, or packages. Public distribution and
+external-LCD use remain subject to unresolved GIPHY credential, licensing,
+attribution, analytics, and policy requirements.
 
-4. Reconnect the LCD USB device or reboot.
+## Desktop behavior
 
-If login startup was enabled, also disable it in NautiBoy before removal or
-remove only its user entry:
+Closing the main window hides it while playback continues in the tray. Use the
+tray's **Quit NautiBoy** action for a full shutdown and hardware-mode restore.
+Preferences can enable per-user login startup and start hidden in the tray;
+startup never sends media unless **Resume last display on launch** is enabled.
 
-```bash
-rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/io.github.nautiboylinux.nautiboy.desktop"
-```
+The resume option stores the last *successfully sent* display separately from
+the current UI selection. On launch it validates the local snapshot and makes
+one bounded resume attempt after device setup. It does not search GIPHY or make
+a provider network request.
 
-NautiBoy does not install a service, write controller-side profiles, or place
-content in the LCD's persistent storage.
-
-## Known limitations
-
-- GIF playback is software-timed and may coalesce frames that are faster than
-  safe LCD transfers
-- Online GIF search is optional and experimental; local GIF support works
-  without it
-- No CPU/GPU monitoring screens
-- NautiBoy must remain running to maintain volatile software display
-- Explicitly chosen GIPHY media persists per GIF mode/Creative preset; search
-  results and thumbnails remain transient
-- No persistent controller storage access
-- No brightness, rotation, or frame-rate controls
-- No pump, fan, RGB, or firmware operations
-- Only the hardware configuration listed above has been physically validated
-
-## Optional Desktop shortcut
-
-An installed copy can create a shortcut in the current user's XDG Desktop
-directory without sudo:
+An installed copy can optionally create or remove its own XDG Desktop shortcut:
 
 ```bash
 nautiboy --create-desktop-shortcut
-```
-
-The shortcut is never created automatically. Remove only NautiBoy's marked
-shortcut with:
-
-```bash
 nautiboy --remove-desktop-shortcut
 ```
 
-The copied desktop file is executable for desktop environments that require
-that launchability bit. A desktop shell may still ask the user to confirm trust
-according to its own security policy.
+## Troubleshooting
 
-## Experimental online GIF search
+- **Device not detected or permission denied:** reconnect the LCD USB device,
+  then log out/in or reboot. Confirm the packaged udev rule is present and the
+  matching hidraw node has a `uaccess` ACL for your desktop user.
+- **Temperature missing:** NautiBoy reads standard Linux `hwmon` data without
+  root. A sensor absent from `/sys/class/hwmon` cannot be displayed; kernel and
+  hardware support vary.
+- **Window disappeared:** normal window close hides NautiBoy to the tray. Use
+  the tray icon to reopen or quit it.
+- **GIPHY unavailable:** configure a user API key and ensure a compatible Secret
+  Service/KWallet backend is running. Local GIFs continue to work without it.
+- **Display did not resume:** enable **Resume last display on launch** and first
+  complete a successful Send. Missing/corrupt resume media fails safely without
+  touching the LCD.
+- **Return to stored iCUE content:** choose **Restore Hardware Mode** or quit
+  NautiBoy through its tray action.
 
-The experimental GIPHY adapter accepts a process-only
-`NAUTIBOY_GIPHY_API_KEY`, or a per-user key saved from Preferences into the
-Linux desktop secret service. The environment variable takes precedence. The
-key is never stored in NautiBoy settings, source files, logs, or media cache.
-Without a key, GIF Search explains that it is not configured while all local
-media features remain available.
+## Uninstall and user data
 
-Search results and thumbnails are session-only. A GIF explicitly chosen with
-**Use GIF** is retained in NautiBoy's per-user XDG data directory so GIF mode
-and independent Creative presets can restore their selection after a restart;
-restoration never sends to the LCD. The search dialog and restored selection
-display “Powered by GIPHY” plus creator/source information when available.
-Public distribution or enablement remains unresolved pending
-clarification of GIPHY licensing, attribution, and external-display use,
-including the policy implications of showing selected media on an LCD without
-attribution on that physical display.
+Quit NautiBoy first, then remove the RPM:
 
-Defensive GIF limits are 25 MiB encoded input, 4096×4096 and 16 megapixels per
-frame, 500 frames, ten minutes total duration, and a 64 MiB decoding working-set
-ceiling.
+```bash
+sudo dnf remove nautiboy
+```
 
-## Safety and architecture
+RPM removal deletes package-owned system files but intentionally retains user
+settings and selected media. Depending on XDG environment variables, NautiBoy
+data is stored under these default locations:
 
-The direct backend revalidates the USB identity immediately before every device
-open. Each image transfer is finite and bounded; short writes, disconnects, and
-identity changes stop refresh without automatic retry. The GUI delegates all HID
-operations to a dedicated worker thread.
+- `~/.config/nautiboy/` — profiles, telemetry presentation, and settings
+- `~/.local/share/io.github.nautiboylinux.nautiboy/` — selected/resume media
+- `~/.cache/nautiboy/` — transient application cache
+- `~/.config/autostart/io.github.nautiboylinux.nautiboy.desktop` — optional
+  login startup entry
 
-Closing the main window hides NautiBoy to the system tray and keeps volatile LCD
-playback active. Use **Quit NautiBoy** in the tray menu for an actual shutdown;
-Quit stops scheduling, restores hardware mode when necessary, stops worker and
-network threads, removes the tray icon, and exits. A second launch activates the
-existing window before it can create another device owner.
+Remove those only if you also want to discard your user state. Saved GIPHY
+credentials live in the desktop keyring and should be removed through NautiBoy
+Preferences before uninstalling.
 
-See:
+## Safety and limitations
 
-- [Safety model](docs/safety.md)
-- [Protocol subset](docs/protocol.md)
-- [Architecture](docs/architecture.md)
-- [GIF playback and optional search](docs/gif-and-online-search.md)
-- [Background, tray, and single-instance behavior](docs/tray-and-background.md)
-- [Per-user autostart](docs/autostart.md)
-- [Development and tests](docs/development.md)
+- NautiBoy must remain running to maintain volatile software display control.
+- GIF/composited scheduling may coalesce frames faster than safe LCD transfers.
+- Persistent LCD storage, firmware, brightness, rotation, pump, fan, and RGB
+  control are intentionally unsupported.
+- GIPHY integration is experimental and user-key-only.
+- Only the hardware and platform listed above have been physically validated.
 
-The reverse-DNS application ID is `io.github.nautiboylinux.nautiboy`, derived
-from the project-owned [NautiBoyLinux GitHub organization](https://github.com/NautiBoyLinux).
-Support and bug reports are handled through the
-[repository Issues page](https://github.com/NautiBoyLinux/nautiboy/issues).
+See the [architecture](docs/architecture.md), [safety model](docs/safety.md),
+[protocol subset](docs/protocol.md), [hardware validation](docs/HARDWARE-VALIDATION.md),
+and [beta release notes](docs/release-notes-v0.4.0-beta.1.md).
 
-## License and attribution
+## Screenshots
 
-NautiBoy source code is licensed under GPL-3.0-or-later. The NautiBoy icon,
-mascot, logo, and wordmark are copyright Andrew Tyler and licensed separately
-under CC BY-SA 4.0; see [ARTWORK-LICENSE.txt](ARTWORK-LICENSE.txt). The LCD
-framing implementation was informed by the GPLv3 OpenLinkHub project and
-independently validated on physical hardware. See
+### Thermals and Orbit
+
+![NautiBoy Thermals profile showing live CPU and GPU temperatures](docs/screenshots/thermals-profile.png)
+
+### Preferences
+
+![NautiBoy Preferences showing startup, resume, and experimental GIPHY settings](docs/screenshots/preferences.png)
+
+These captures show the current public-beta interface. Historical development
+screenshots elsewhere in `docs/` remain validation history and are not presented
+as current release UI. Media-profile screenshots containing third-party content
+are intentionally omitted until suitable redistribution-safe demo media exists.
+
+## License and support
+
+Source code is GPL-3.0-or-later. NautiBoy artwork is copyright Andrew Tyler and
+licensed separately under CC BY-SA 4.0; see [ARTWORK-LICENSE.txt](ARTWORK-LICENSE.txt).
+The protocol work was informed by the GPLv3 OpenLinkHub project; see
 [ATTRIBUTION.md](ATTRIBUTION.md).
+
+Report bugs through [GitHub Issues](https://github.com/NautiBoyLinux/nautiboy/issues).

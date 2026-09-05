@@ -26,7 +26,7 @@
    dedicated `QThread`.
 
 The direct backend is intentionally small. A future OpenLinkHub adapter can
-implement the same `NautilusBackend` protocol, but version 0.1 does not start,
+implement the same `NautilusBackend` protocol, but NautiBoy does not start,
 configure, or depend on an OpenLinkHub service.
 
 ## State model
@@ -71,7 +71,7 @@ programmatic Orbit renderer. Creative contains four stable, independently stored
 sub-presets; their active selection and renameable display names persist while
 their background, Orbit, and telemetry-overlay settings remain independent.
 
-Telemetry hardware identity is separate from future user presentation state.
+Telemetry hardware identity is separate from user presentation state.
 Versioned presentation settings live in a separate atomic per-user
 `telemetry.json` file keyed by deterministic sensor ID. A strict maximum of two
 enabled items is enforced independently of the UI.

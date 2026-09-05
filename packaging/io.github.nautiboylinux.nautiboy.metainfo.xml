@@ -2,14 +2,18 @@
 <component type="desktop-application">
   <id>io.github.nautiboylinux.nautiboy</id>
   <name>NautiBoy</name>
-  <summary>Linux controller for Corsair NAUTILUS RS LCD displays</summary>
+  <summary>Control a Corsair Nautilus LCD from Linux</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later AND CC-BY-SA-4.0</project_license>
   <developer id="io.github.nautiboylinux">
     <name>Andrew Tyler</name>
   </developer>
   <description>
-    <p>NautiBoy is an open-source Linux controller for Corsair NAUTILUS RS LCD displays.</p>
+    <p>NautiBoy is an unofficial Linux controller for the hardware-tested Corsair Nautilus LCD Cap.</p>
+    <p>Choose among Thermals, Image, GIF, and Creative modes. Display local JPEG, PNG, and animated GIF media; monitor up to two Linux temperature sensors with the animated Orbit design; or combine media, Orbit, and telemetry in four persistent Creative presets.</p>
+    <p>NautiBoy can run in the system tray, start with the desktop session, optionally resume the last successfully sent display, and safely restore the controller's stored hardware-mode content.</p>
+    <p>GIPHY search is optional, experimental, and requires a user-provided API key. Local media does not require GIPHY.</p>
+    <p>Hardware validation is limited to CORSAIR Nautilus LCD Cap 1b1c:0c57, interface 0, firmware 0.3.0.5, on Fedora KDE Plasma 44.</p>
     <p>NautiBoy is an unofficial community project and is not affiliated with, endorsed by, or supported by Corsair.</p>
   </description>
   <url type="homepage">https://github.com/NautiBoyLinux/nautiboy</url>
@@ -17,10 +21,20 @@
   <url type="bugtracker">https://github.com/NautiBoyLinux/nautiboy/issues</url>
   <launchable type="desktop-id">io.github.nautiboylinux.nautiboy.desktop</launchable>
   <content_rating type="oars-1.1" />
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/NautiBoyLinux/nautiboy/main/docs/screenshots/thermals-profile.png</image>
+      <caption>Thermals mode with the animated Orbit display and two selected temperature sensors</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/NautiBoyLinux/nautiboy/main/docs/screenshots/preferences.png</image>
+      <caption>Preferences for login startup, display resume, and optional experimental GIPHY access</caption>
+    </screenshot>
+  </screenshots>
   <releases>
-    <release version="0.2.0" date="2026-09-04" type="development">
+    <release version="0.4.0-beta.1" date="2026-09-05" type="development">
       <description>
-        <p>Adds hardware-validated local GIF playback, bounded deadline scheduling, KDE tray operation, per-user autostart, single-instance protection, and experimental GIPHY development search.</p>
+        <p>First public beta with static and animated media, Thermals Orbit, four Creative presets, optional experimental GIPHY search, KDE tray integration, autostart, and opt-in display resume.</p>
       </description>
     </release>
     <release version="0.1.0" date="2026-09-04">

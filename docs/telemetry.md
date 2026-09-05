@@ -23,9 +23,9 @@ requested explicitly for future device-change integration. Removed sensors stay
 visible as unavailable; a returning deterministic ID is recognized as the same
 sensor.
 
-Future presentation settings will be stored separately and keyed by sensor ID.
-They may include a custom label, visibility, font color/family/size, and layout
-position. Future Creative rendering order is strictly:
+Presentation settings are stored separately and keyed by sensor ID. The model
+reserves a custom label, visibility, font color/family/size, and layout position.
+Creative rendering order is strictly:
 
 1. JPEG or GIF background
 2. optional Orbit perimeter overlay
@@ -50,8 +50,8 @@ color. These values never alter raw sensor identity or hardware metadata.
 
 The Thermals panel groups every discovered sensor by normalized physical device.
 Selected sensors remain editable, while unselected checkboxes are disabled at
-the two-item limit without hiding their sensor rows. This panel configures only
-future rendering and never emits HID operations.
+the two-item limit without hiding their sensor rows. This panel configures
+presentation state and never emits HID operations by itself.
 
 ## Orbit theme
 

@@ -1,11 +1,11 @@
-# v0.1 hardware validation
+# Historical v0.1 hardware validation
 
 Status: **passed** on 2026-09-03.
 
 ## Validated system and device
 
 - Host: Fedora KDE 44
-- User: `Dad` (application ran without `sudo`)
+- Execution: normal logged-in desktop user, without `sudo`
 - Device: CORSAIR Nautilus LCD Cap
 - USB identity: `1b1c:0c57`, interface 0
 - Firmware: `0.3.0.5`
@@ -62,8 +62,8 @@ The installed rule exactly matches `packaging/70-nautilus-lcd.rules`:
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1b1c", ATTRS{idProduct}=="0c57", TAG+="uaccess"
 ```
 
-The node remained `root:root` mode `0660`; systemd-logind supplied user `Dad`
-an `rw-` ACL. Read and write access both succeeded without sudo. The device
+The node remained `root:root` mode `0660`; systemd-logind supplied the logged-in
+desktop user an `rw-` ACL. Read and write access both succeeded without sudo. The device
 retained `uaccess` and `seat` tags. No application instance remained afterward.
 
 ## Scope confirmed

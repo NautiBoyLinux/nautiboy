@@ -1,5 +1,8 @@
 # GIF playback and optional search
 
+In `v0.4.0-beta.1`, local GIF playback is a core offline feature. GIPHY search
+remains an optional, user-key-only experimental integration.
+
 Local GIFs are read into a bounded encoded buffer, validated sequentially, and
 decoded one frame at a time. Pillow supplies the composed canvas after GIF
 transparency and disposal handling. Every LCD frame then uses the same Fit or

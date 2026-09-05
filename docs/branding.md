@@ -1,6 +1,6 @@
 # Branding assets
 
-The application name is **NautiBoy** and the final application ID is
+The application name is **NautiBoy**, release target `v0.4.0-beta.1`, and the final application ID is
 `io.github.nautiboylinux.nautiboy`. The normalized ID is used consistently for the
 desktop entry, AppStream component, icons, autostart entry, and per-user
 single-instance identity. It is derived from the project-owned
