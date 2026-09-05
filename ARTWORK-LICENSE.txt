@@ -1,0 +1,33 @@
+NautiBoy Artwork License and Attribution
+========================================
+
+Copyright (c) 2026 Andrew Tyler
+
+The NautiBoy logo, icon, mascot, wordmark, and other artwork contained in this
+branding package are licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0).
+
+License text and details:
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Attribution:
+"NautiBoy artwork © 2026 Andrew Tyler, licensed under CC BY-SA 4.0."
+
+ShareAlike notice:
+If you remix, transform, or build upon this artwork, you must distribute your
+contributions under the same license as the original, subject to the complete
+terms of CC BY-SA 4.0.
+
+Code license distinction
+------------------------
+
+This artwork license applies to artwork only. The NautiBoy source code remains
+licensed separately under the GNU General Public License, version 3 or any later
+version (GPL-3.0-or-later), as stated in the source repository.
+
+Trademark and non-affiliation disclaimer
+----------------------------------------
+
+NautiBoy is an unofficial, independent community project. It is not affiliated
+with, endorsed by, or supported by Corsair. Corsair and any related names,
+logos, product names, or marks are the property of their respective owners.

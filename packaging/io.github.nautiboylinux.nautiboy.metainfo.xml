@@ -4,7 +4,7 @@
   <name>NautiBoy</name>
   <summary>Linux controller for Corsair NAUTILUS RS LCD displays</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>GPL-3.0-or-later</project_license>
+  <project_license>GPL-3.0-or-later AND CC-BY-SA-4.0</project_license>
   <developer id="io.github.nautiboylinux">
     <name>Andrew Tyler</name>
   </developer>

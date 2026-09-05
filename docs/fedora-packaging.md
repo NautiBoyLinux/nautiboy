@@ -10,7 +10,8 @@ optional experimental GIPHY key. Fedora's package depends on SecretStorage for
 Freedesktop Secret Service integration with compatible desktop wallets.
 
 The binary RPM owns the `nautiboy` executable, Python package, desktop entry,
-AppStream metadata, hicolor icons, documentation, license, and the narrow rule:
+AppStream metadata, hicolor icons, documentation, code and artwork license
+notices, and the narrow rule:
 
 ```udev
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1b1c", ATTRS{idProduct}=="0c57", TAG+="uaccess"
@@ -39,6 +40,11 @@ not RPM uninstall scriptlets.
 
 The application ID is `io.github.nautiboylinux.nautiboy`, derived from the
 project-owned `NautiBoyLinux/nautiboy` GitHub namespace.
+
+The RPM license expression is `GPL-3.0-or-later AND CC-BY-SA-4.0`: GPL covers
+the source code, while CC BY-SA covers the bundled NautiBoy branding artwork.
+The scopes and attribution are recorded in `LICENSE` and
+`ARTWORK-LICENSE.txt` respectively.
 
 All package-owned system files are declared as `root:root` with the standard
 RPM `%defattr(-,root,root,-)` file-list directive. This is harmless explicit

@@ -115,11 +115,11 @@ def _static_background() -> Image.Image:
 @lru_cache(maxsize=1)
 def _mascot() -> Image.Image:
     """Extract the mascot from the bundled canonical artwork, without its frame."""
-    asset = Path(__file__).parents[1] / "assets" / "nautiboy-icon-development-source.png"
+    asset = Path(__file__).parents[1] / "assets" / "nautiboy-icon-1024.png"
     with Image.open(asset) as source:
-        # The canonical asset is 352 square. This crop isolates the existing cat
+        # The permanent icon master is 1024 square. This crop isolates the cat
         # silhouette and its neon outline, excluding the rounded application frame.
-        mascot = source.convert("RGBA").crop((62, 69, 282, 286))
+        mascot = source.convert("RGBA").crop((180, 220, 844, 880))
         red, green, blue, _alpha = mascot.split()
         luminance = ImageChops.lighter(red, ImageChops.lighter(green, blue))
         mascot.putalpha(luminance.point(lambda value: 0 if value < 150 else min(255, value + 25)))

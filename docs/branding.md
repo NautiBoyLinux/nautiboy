@@ -6,23 +6,34 @@ desktop entry, AppStream component, icons, autostart entry, and per-user
 single-instance identity. It is derived from the project-owned
 `NautiBoyLinux/nautiboy` GitHub namespace.
 
-`src/nautiboy/assets/logo-reference-original.png` is an unchanged copy of the
-supplied 345×358 raster concept. `packaging/generate_icons.py` center-crops it to
-the square 345×345 development source used by Qt and generates hicolor PNGs at
-16, 32, 48, 64, 128, and 256 pixels.
+Permanent source artwork lives under `artwork/`. The icon-only masters are
+`artwork/masters/nautiboy-icon.svg` and the transparent 1024×1024
+`artwork/masters/nautiboy-icon-1024.png`. The full wordmark/logo masters are
+`artwork/masters/nautiboy-logo.svg` and the transparent 1024×1024
+`artwork/masters/nautiboy-logo-1024.png`. The icon-only mark is used for the
+application, desktop entry, AppStream/Discover, tray, and RPM; the full logo is
+reserved for README, documentation, release, and promotional presentation.
+
+The original approved 345×358 concept is retained only at
+`artwork/reference/approved-logo-reference.png` as historical provenance. It is
+not an active runtime or icon-generation input.
 
 `branding.application_icon()` is the single runtime loader for the window,
 task switcher, tray icon, tray notifications, and header logo. It always loads
 bundled assets and therefore does not depend on an installed desktop entry or
-system icon theme. Exact copies of the existing 32×32 and 48×48 derivatives are
-bundled alongside the 345×345 source so Qt can favor crisp small artwork.
+system icon theme. Exact copies of the optimized 32×32 and 48×48 derivatives
+are bundled alongside the 1024×1024 icon master so Qt can favor crisp small
+artwork.
 
-The existing 32×32 and 48×48 derivatives retain the recognizable purple cat
-silhouette. The existing 16×16 derivative loses much of that silhouette, so it
-is not included in the runtime icon set; Qt scales the clearer 32×32 artwork for
-16–24 pixel tray slots. No logo artwork was redesigned.
+Curated transparent derivatives at 16, 32, 48, 64, 128, 256, 512, and 1024
+pixels live under `artwork/icons/png/`. `packaging/generate_icons.py` validates
+their dimensions and transparency, then copies them into the hicolor hierarchy
+using the final application ID. The supplied optimized small derivatives are
+used directly instead of downscaling the wordmark or regenerating tiny icons.
 
-These are intentionally development assets. Before public packaging, supply a
-square vector master (preferably SVG) or at least a transparent 1024×1024 PNG.
-The ideal master should preserve the cat/nautilus silhouette and restrained
-purple glow while remaining legible at 16 and 32 pixels.
+The NautiBoy icon, mascot, logo, wordmark, and derivatives are copyright Andrew
+Tyler and licensed under CC BY-SA 4.0. Source code remains separately licensed
+under GPL-3.0-or-later. See `ARTWORK-LICENSE.txt`; neither license statement
+grants ownership of Corsair names or marks. NautiBoy remains an unofficial
+community project and is not affiliated with, endorsed by, or supported by
+Corsair.

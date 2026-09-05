@@ -5,7 +5,7 @@ Version:        0.2.0~dev0
 Release:        18%{?dist}
 Summary:        Linux controller for Corsair NAUTILUS RS LCD displays
 
-License:        GPL-3.0-or-later
+License:        GPL-3.0-or-later AND CC-BY-SA-4.0
 URL:            https://github.com/NautiBoyLinux/nautiboy
 Source0:        %{name}-%{upstream_version}.tar.gz
 
@@ -44,7 +44,7 @@ install -Dpm 0644 packaging/io.github.nautiboylinux.nautiboy.metainfo.xml \
 install -Dpm 0644 packaging/70-nautilus-lcd.rules \
     %{buildroot}%{_udevrulesdir}/70-nautilus-lcd.rules
 
-for size in 16 32 48 64 128 256; do
+for size in 16 32 48 64 128 256 512; do
     install -Dpm 0644 \
         packaging/icons/hicolor/${size}x${size}/apps/io.github.nautiboylinux.nautiboy.png \
         %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/io.github.nautiboylinux.nautiboy.png
@@ -57,7 +57,7 @@ appstreamcli validate --no-net packaging/io.github.nautiboylinux.nautiboy.metain
 
 %files -f %{pyproject_files}
 %defattr(-,root,root,-)
-%license LICENSE
+%license LICENSE ARTWORK-LICENSE.txt
 %doc ATTRIBUTION.md CHANGELOG.md README.md
 %doc docs/*.md
 %{_bindir}/nautiboy

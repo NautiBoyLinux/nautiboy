@@ -2,7 +2,7 @@
 
 NautiBoy is an open-source Linux controller for Corsair NAUTILUS RS LCD displays.
 
-![NautiBoy interface](docs/nautiboy-v0.1-ui.png)
+![NautiBoy logo](artwork/masters/nautiboy-logo-1024.png)
 
 The v0.2 development branch extends the hardware-validated v0.1 static-image
 interface with bounded local GIF playback. Local JPEG, PNG, and GIF support has
@@ -124,10 +124,6 @@ content in the LCD's persistent storage.
 - No brightness, rotation, or frame-rate controls
 - No pump, fan, RGB, or firmware operations
 - Only the hardware configuration listed above has been physically validated
-- The current icon is a development raster
-
-A final square SVG or transparent 1024×1024 icon master is desired before a
-polished public release.
 
 ## Optional Desktop shortcut
 
@@ -202,6 +198,9 @@ Support and bug reports are handled through the
 
 ## License and attribution
 
-NautiBoy is licensed under GPL-3.0-or-later. The LCD framing implementation was
-informed by the GPLv3 OpenLinkHub project and independently validated on physical
-hardware. See [ATTRIBUTION.md](ATTRIBUTION.md).
+NautiBoy source code is licensed under GPL-3.0-or-later. The NautiBoy icon,
+mascot, logo, and wordmark are copyright Andrew Tyler and licensed separately
+under CC BY-SA 4.0; see [ARTWORK-LICENSE.txt](ARTWORK-LICENSE.txt). The LCD
+framing implementation was informed by the GPLv3 OpenLinkHub project and
+independently validated on physical hardware. See
+[ATTRIBUTION.md](ATTRIBUTION.md).

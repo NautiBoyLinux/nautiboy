@@ -47,17 +47,21 @@ def test_theme_is_separate_and_contains_semantic_states() -> None:
         assert f'state="{state.value}"' in STYLESHEET
 
 
-def test_development_icon_source_and_desktop_sizes() -> None:
-    source = asset_path("nautiboy-icon-development-source.png")
+def test_permanent_icon_source_and_desktop_sizes() -> None:
+    source = asset_path("nautiboy-icon-1024.png")
     assert source.is_file()
     with Image.open(source) as image:
-        assert image.size == (345, 345)
+        assert image.size == (1024, 1024)
+        assert image.convert("RGBA").getchannel("A").getextrema()[0] == 0
 
     root = Path(__file__).resolve().parents[1]
-    for size in (16, 32, 48, 64, 128, 256):
+    assert (root / "artwork/masters/nautiboy-icon.svg").is_file()
+    assert (root / "artwork/masters/nautiboy-logo.svg").is_file()
+    for size in (16, 32, 48, 64, 128, 256, 512):
         icon = root / f"packaging/icons/hicolor/{size}x{size}/apps/{APP_ID}.png"
         with Image.open(icon) as image:
             assert image.size == (size, size)
+            assert image.convert("RGBA").getchannel("A").getextrema()[0] == 0
 
 
 def test_canonical_bundled_icon_is_non_null_at_tray_sizes() -> None:

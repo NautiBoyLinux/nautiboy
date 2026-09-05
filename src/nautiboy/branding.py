@@ -28,7 +28,7 @@ def application_icon_paths() -> tuple[Path, ...]:
     return (
         asset_path("nautiboy-icon-32.png"),
         asset_path("nautiboy-icon-48.png"),
-        asset_path("nautiboy-icon-development-source.png"),
+        asset_path("nautiboy-icon-1024.png"),
     )
 
 
@@ -36,6 +36,6 @@ def application_icon_paths() -> tuple[Path, ...]:
 def application_icon() -> QIcon:
     """Canonical bundled icon used without relying on desktop installation."""
     icon = QIcon()
-    for path, size in zip(application_icon_paths(), (32, 48, 345), strict=True):
+    for path, size in zip(application_icon_paths(), (32, 48, 1024), strict=True):
         icon.addFile(str(path), QSize(size, size))
     return icon

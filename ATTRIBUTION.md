@@ -19,3 +19,11 @@ reports, after which the controller returned to its existing hardware-mode GIF.
 
 Corsair product and brand names belong to Corsair. This is an independent,
 unofficial open-source project and is not endorsed by Corsair.
+
+## NautiBoy artwork
+
+The NautiBoy icon, mascot, logo, wordmark, and official branding derivatives
+are original project artwork copyright Andrew Tyler and licensed under CC BY-SA
+4.0. This artwork license is separate from the GPL-3.0-or-later source-code
+license. See [ARTWORK-LICENSE.txt](ARTWORK-LICENSE.txt) for the full scope,
+attribution, and ShareAlike notice.

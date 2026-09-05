@@ -33,10 +33,12 @@ packages = ["src/nautiboy"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/ARTWORK-LICENSE.txt",
   "/ATTRIBUTION.md",
   "/CHANGELOG.md",
   "/LICENSE",
   "/README.md",
+  "/artwork",
   "/docs",
   "/packaging",
   "/pyproject.toml",
