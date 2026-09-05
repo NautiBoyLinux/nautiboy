@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 )
 
 from nautiboy.application import control_policy, state_after_image_error
+from nautiboy.autostart import UserPreferences
 from nautiboy.branding import APP_NAME, DISCLAIMER, application_icon
 from nautiboy.creative import (
     CreativeComposition,
@@ -48,8 +49,10 @@ from nautiboy.device.identity import DeviceIdentity
 from nautiboy.imaging.processor import ImageProcessingError, ResizeStrategy
 from nautiboy.gif.playback import GifPlaybackController
 from nautiboy.media import PreparedMedia, prepare_downloaded_gif, prepare_local_media
+from nautiboy.last_active import LastActiveDisplay, LastActiveDisplayStore
 from nautiboy.models import BUSY_STATES, AppState
 from nautiboy.providers.giphy import GiphyProvider
+from nautiboy.providers.base import SelectedGif
 from nautiboy.profiles import (
     CREATIVE_PRESET_IDS,
     CREATIVE_PRESET_NAME_MAX_LENGTH,
@@ -69,6 +72,11 @@ from nautiboy.telemetry import (
 )
 from nautiboy.telemetry.orbit import OrbitTransferStats, phase_at, render_orbit_jpeg
 from nautiboy.telemetry.providers.base import TelemetryProvider
+from nautiboy.selected_media import (
+    SelectedGiphyMedia,
+    SelectedMediaStore,
+    SelectedMediaStoreError,
+)
 
 from .gif_search_dialog import GifSearchDialog
 from .orbit import ORBIT_PREVIEW_INTERVAL_MS, OrbitPlaybackController
@@ -100,6 +108,9 @@ class MainWindow(QMainWindow):
         profile_store: ProfileStore | None = None,
         telemetry_provider: TelemetryProvider | None = None,
         telemetry_store: TelemetryPresentationStore | None = None,
+        selected_media_store: SelectedMediaStore | None = None,
+        preferences: UserPreferences | None = None,
+        last_active_store: LastActiveDisplayStore | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle(APP_NAME)
@@ -115,6 +126,7 @@ class MainWindow(QMainWindow):
         self._preview_movie: QMovie | None = None
         self._preview_buffer: QBuffer | None = None
         self._online_gif_data: bytes | None = None
+        self._gif_profile_media: PreparedMedia | None = None
         self._session_touched_display = False
         self._close_pending = False
         self._close_to_tray = False
@@ -122,8 +134,22 @@ class MainWindow(QMainWindow):
         self._workers_stopped = False
         self._search_dialog: GifSearchDialog | None = None
         self._initial_send_jpeg: bytes | None = None
+        supplied_profile_store = profile_store
         self._profile_store = profile_store or ProfileStore()
         self._profiles = self._profile_store.load()
+        self._selected_media_store = selected_media_store or (
+            SelectedMediaStore(self._profile_store.path.parent / "selected-media")
+            if supplied_profile_store is not None
+            else SelectedMediaStore()
+        )
+        self._preferences = preferences or UserPreferences()
+        self._last_active_store = last_active_store or LastActiveDisplayStore(
+            self._profile_store.path.parent / "last-active-display.json"
+            if supplied_profile_store is not None else None
+        )
+        self._last_active_display = self._last_active_store.load()
+        self._pending_active_display: LastActiveDisplay | None = None
+        self._startup_resume_attempted = False
         self._telemetry_store = telemetry_store or TelemetryPresentationStore()
         self._telemetry_presentations = self._telemetry_store.load()
         self._telemetry_snapshot: TelemetrySnapshot | None = None
@@ -193,6 +219,9 @@ class MainWindow(QMainWindow):
         self._orbit_preview_timer.setInterval(ORBIT_PREVIEW_INTERVAL_MS)
         self._orbit_preview_timer.timeout.connect(self._render_dynamic_preview)
         self._orbit_preview_timer.start()
+        self._restore_gif_profile_selection()
+        self._restore_last_active_ui_media()
+        self._apply_profile_ui()
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -366,7 +395,7 @@ class MainWindow(QMainWindow):
         background_group = QGroupBox("Background")
         background_layout = QVBoxLayout(background_group)
         self.creative_select_button = QPushButton("Select JPEG, PNG, or GIF")
-        self.creative_giphy_button = QPushButton("Search GIPHY (experimental)")
+        self.creative_giphy_button = QPushButton("Search GIPHY")
         self.creative_media_info = QLabel("No background selected")
         self.creative_media_info.setWordWrap(True)
         self.creative_resize_combo = QComboBox()
@@ -580,14 +609,29 @@ class MainWindow(QMainWindow):
             ", ".join(item.display_label for item in selected) if selected else "No telemetry selected"
         )
         media = self._creative_media.get(active)
+        selected_slot = background.get("selected_giphy_slot")
+        if media is None and selected_slot:
+            selection = self._selected_media_store.load(selected_slot)
+            if selection is not None:
+                try:
+                    media = self._prepare_persisted_selection(
+                        selection, background["resize_strategy"]
+                    )
+                    self._creative_media[active] = media
+                except ImageProcessingError:
+                    media = None
         if media is None and background.get("source_path"):
             try:
                 media = prepare_local_media(background["source_path"], background["resize_strategy"])
                 self._creative_media[active] = media
             except ImageProcessingError:
                 media = None
+        attribution = (
+            f" • {media.creator + ' • ' if media.creator else ''}{media.attribution}"
+            if media and media.attribution else ""
+        )
         self.creative_media_info.setText(
-            f"{media.title} • {'Animated GIF' if media and media.animated else 'Static image'}"
+            f"{media.title} • {'Animated GIF' if media and media.animated else 'Static image'}{attribution}"
             if media else ("Saved media unavailable" if background.get("source_path") else "No background selected")
         )
 
@@ -611,10 +655,17 @@ class MainWindow(QMainWindow):
             self._message(str(error))
             return
         self._creative_media[preset["id"]] = media
+        selected_slot = preset["background"].get("selected_giphy_slot")
+        if selected_slot:
+            try:
+                self._selected_media_store.remove(selected_slot)
+            except SelectedMediaStoreError as error:
+                self._message(str(error))
         try:
             self._profile_store.update_creative_preset(
                 self._profiles, preset["id"], "background",
                 {"media_kind": "gif" if media.gif else "image", "source_path": filename,
+                 "selected_giphy_slot": None,
                  "resize_strategy": strategy},
             )
         except ProfileStoreError as error:
@@ -631,30 +682,35 @@ class MainWindow(QMainWindow):
         dialog.exec()
         self._search_dialog = None
 
-    @Slot(bytes, str)
-    def _creative_online_gif_selected(self, data: bytes, title: str) -> None:
+    @Slot(object)
+    def _creative_online_gif_selected(self, selection: SelectedGif | bytes, title: str | None = None) -> None:
         if self._profiles.active_profile_id != ProfileType.CREATIVE.value:
             self._message("Creative GIPHY selection is available only in Creative mode")
             return
         preset = self._active_creative_preset()
+        chosen = self._coerce_selected_gif(selection, title)
         try:
             media = prepare_downloaded_gif(
-                data, title, preset["background"]["resize_strategy"]
+                chosen.data, chosen.title, preset["background"]["resize_strategy"],
+                creator=chosen.creator, source_url=chosen.source_url,
+                attribution=chosen.attribution,
             )
         except ImageProcessingError as error:
             self._message(str(error))
             return
         self._creative_media[preset["id"]] = media
+        slot = f"creative-{preset['id']}"
         try:
+            self._selected_media_store.save(slot, chosen)
             self._profile_store.update_creative_preset(
                 self._profiles, preset["id"], "background",
-                {"media_kind": "gif", "source_path": None},
+                {"media_kind": "gif", "source_path": None, "selected_giphy_slot": slot},
             )
-        except ProfileStoreError as error:
+        except (ProfileStoreError, SelectedMediaStoreError) as error:
             self._message(str(error))
         self._apply_creative_preset_ui()
         self._render_creative_preview()
-        self._message(f"Prepared experimental GIPHY background: {title}")
+        self._message(f"Prepared GIPHY background: {chosen.title}")
 
     @Slot()
     def _creative_settings_changed(self) -> None:
@@ -1016,6 +1072,229 @@ class MainWindow(QMainWindow):
         self.preview.setText("Select media for this mode")
         self.preview_caption.setText("PREVIEW  •  480 × 480")
 
+    @staticmethod
+    def _coerce_selected_gif(
+        selection: SelectedGif | bytes, title: str | None = None
+    ) -> SelectedGiphyMedia:
+        if isinstance(selection, SelectedGif):
+            result = selection.result
+            return SelectedGiphyMedia(
+                selection.data, result.title, result.provider, result.identifier,
+                result.creator, result.source_url, selection.attribution,
+            )
+        return SelectedGiphyMedia(selection, title or "Selected GIPHY GIF")
+
+    @staticmethod
+    def _prepare_persisted_selection(
+        selection: SelectedGiphyMedia, strategy: ResizeStrategy | str
+    ) -> PreparedMedia:
+        return prepare_downloaded_gif(
+            selection.data, selection.title, strategy, creator=selection.creator,
+            source_url=selection.source_url, attribution=selection.attribution,
+        )
+
+    def _restore_gif_profile_selection(self) -> None:
+        settings = self._profiles.profile(ProfileType.GIF.value).settings
+        slot = settings.get("selected_giphy_slot")
+        if slot != "gif-profile":
+            return
+        selection = self._selected_media_store.load(slot)
+        if selection is None:
+            return
+        try:
+            media = self._prepare_persisted_selection(selection, settings["resize_strategy"])
+        except ImageProcessingError:
+            return
+        self._online_gif_data = selection.data
+        self._selected_path = None
+        self._gif_profile_media = media
+        if self._profiles.active_profile_id == ProfileType.GIF.value:
+            self._set_selected_media(media)
+
+    def _load_display_media(self, display: LastActiveDisplay) -> PreparedMedia | None:
+        reference = display.media
+        if reference is None or display.resize_strategy is None:
+            return None
+        try:
+            if reference["kind"] == "local":
+                return prepare_local_media(reference["path"], display.resize_strategy)
+            selection = self._selected_media_store.load(reference["slot"])
+            return (
+                self._prepare_persisted_selection(selection, display.resize_strategy)
+                if selection is not None else None
+            )
+        except (ImageProcessingError, KeyError, ValueError):
+            return None
+
+    def _restore_last_active_ui_media(self) -> None:
+        display = self._last_active_display
+        if display is None or display.mode != self._profiles.active_profile_id:
+            return
+        if display.mode not in {ProfileType.IMAGE.value, ProfileType.GIF.value}:
+            return
+        media = self._load_display_media(display)
+        if media is None:
+            return
+        self._selected_media = media
+        self._prepared_jpeg = media.static_jpeg or media.preview_jpeg
+        if display.media and display.media["kind"] == "local":
+            self._selected_path = Path(display.media["path"])
+        else:
+            self._online_gif_data = media.gif.data if media.gif else None
+            self._gif_profile_media = media
+        self._set_selected_media(media)
+
+    def _media_reference(self, *, creative_preset: dict | None = None) -> dict | None:
+        if creative_preset is not None:
+            background = creative_preset["background"]
+            if background.get("selected_giphy_slot"):
+                return {"kind": "giphy", "slot": background["selected_giphy_slot"]}
+            if background.get("source_path"):
+                return {"kind": "local", "path": background["source_path"]}
+            return None
+        if self._selected_path is not None:
+            return {"kind": "local", "path": str(self._selected_path)}
+        if self._profiles.profile(ProfileType.GIF.value).settings.get("selected_giphy_slot"):
+            return {"kind": "giphy", "slot": "gif-profile"}
+        return None
+
+    def _active_display_candidate(self, mode: ProfileType) -> LastActiveDisplay:
+        if mode is ProfileType.CREATIVE:
+            preset = deepcopy(self._active_creative_preset())
+            return LastActiveDisplay(
+                mode.value, preset["background"]["resize_strategy"],
+                self._media_reference(creative_preset=preset), preset["id"], preset,
+            )
+        if mode in {ProfileType.IMAGE, ProfileType.GIF}:
+            reference = (
+                {"kind": "local", "path": str(self._selected_path)}
+                if mode is ProfileType.IMAGE and self._selected_path is not None
+                else self._media_reference()
+            )
+            return LastActiveDisplay(
+                mode.value, str(self.mode_combo.currentData()), reference
+            )
+        return LastActiveDisplay(mode.value)
+
+    def _record_successful_active_display(self) -> None:
+        if self._pending_active_display is None:
+            return
+        display = self._pending_active_display
+        try:
+            if display.media and display.media.get("kind") == "giphy":
+                active_media = (
+                    self._creative_lcd_media
+                    if display.mode == ProfileType.CREATIVE.value
+                    else self._selected_media
+                )
+                if active_media is None or active_media.gif is None:
+                    raise RuntimeError("cannot preserve active GIPHY media")
+                self._selected_media_store.save(
+                    "last-active-display",
+                    SelectedGiphyMedia(
+                        active_media.gif.data, active_media.title,
+                        creator=active_media.creator, source_url=active_media.source_url,
+                        attribution=active_media.attribution or "Powered by GIPHY",
+                    ),
+                )
+                display = replace(
+                    display, media={"kind": "giphy", "slot": "last-active-display"}
+                )
+            self._last_active_store.save(display)
+        except (RuntimeError, SelectedMediaStoreError) as error:
+            self._message(str(error))
+            return
+        self._last_active_display = display
+        self._pending_active_display = None
+
+    def _attempt_startup_resume(self) -> None:
+        if self._startup_resume_attempted or self._identity is None:
+            return
+        self._startup_resume_attempted = True
+        if not self._preferences.resume_last_display() or self._last_active_display is None:
+            return
+        display = self._last_active_display
+        try:
+            if display.mode in {ProfileType.IMAGE.value, ProfileType.GIF.value}:
+                media = self._load_display_media(display)
+                if media is None:
+                    raise ValueError("saved media is unavailable or invalid")
+                self._pending_active_display = display
+                self._start_media_display(media, display.resize_strategy or "fit")
+            elif display.mode == ProfileType.THERMALS.value:
+                if self._orbit_frame(0.0) is None:
+                    raise ValueError("saved telemetry selection is unavailable")
+                self._pending_active_display = display
+                self._session_touched_display = True
+                self._set_state(AppState.SENDING)
+                self._orbit_measurements.clear()
+                self._orbit_measurement_started = time.monotonic()
+                self._orbit_playback.start()
+            elif display.mode == ProfileType.CREATIVE.value:
+                preset = deepcopy(display.creative_settings)
+                if not isinstance(preset, dict) or preset.get("id") != display.creative_preset_id:
+                    raise ValueError("saved Creative state is invalid")
+                media = self._load_display_media(display) if display.media else None
+                if display.media and media is None:
+                    raise ValueError("saved Creative media is unavailable or invalid")
+                self._pending_active_display = display
+                self._start_creative_display(preset, media)
+            else:
+                return
+            self._message(f"Resuming last {display.mode} display…")
+        except (KeyError, TypeError, ValueError) as error:
+            self._pending_active_display = None
+            self._message(f"Last display was not resumed: {error}")
+
+    def _start_media_display(self, media: PreparedMedia, strategy: str) -> None:
+        self._refresher.stop()
+        self._gif_playback.stop()
+        self._orbit_playback.stop()
+        self._creative_playback.stop()
+        self._session_touched_display = True
+        self._set_state(AppState.SENDING)
+        if media.animated and media.gif is not None:
+            self._lcd_gif = media.gif
+            self._lcd_strategy = strategy
+            self._initial_send_jpeg = None
+            self._gif_playback.start(self._lcd_gif)
+        else:
+            self._lcd_gif = None
+            self._initial_send_jpeg = media.static_jpeg or media.preview_jpeg
+            self.send_requested.emit(self._initial_send_jpeg)
+
+    def _start_creative_display(self, preset: dict, media: PreparedMedia | None) -> None:
+        if (media is None and not preset["orbit_overlay"]["enabled"]
+                and not preset["telemetry_overlay"]["enabled"]):
+            raise ValueError("saved Creative display has no content")
+        self._refresher.stop()
+        self._gif_playback.stop()
+        self._orbit_playback.stop()
+        self._creative_playback.stop()
+        self._creative_lcd_preset = deepcopy(preset)
+        self._creative_lcd_media = media
+        self._creative_lcd_presentations = tuple(deepcopy(self._telemetry_presentations.selected))
+        self._creative_measurements = []
+        self._creative_measurement_started = time.monotonic()
+        self._session_touched_display = True
+        self._set_state(AppState.SENDING)
+        dynamic = bool(media and media.animated) or (
+            preset["orbit_overlay"]["enabled"] and preset["orbit_overlay"]["animation_enabled"]
+        ) or preset["telemetry_overlay"]["enabled"]
+        if dynamic:
+            self._creative_playback.start(
+                media.gif if media else None,
+                orbit_animated=(preset["orbit_overlay"]["enabled"]
+                                and preset["orbit_overlay"]["animation_enabled"]),
+                telemetry_enabled=preset["telemetry_overlay"]["enabled"],
+            )
+            return
+        background = self._creative_background(media, preset["background"]["resize_strategy"])
+        self._initial_send_jpeg = compose_creative_jpeg(
+            replace(self._creative_composition(preset, 0.0), background=background)
+        )
+        self.send_requested.emit(self._initial_send_jpeg)
+
     def _apply_profile_ui(self) -> None:
         active = ProfileType(self._profiles.active_profile_id)
         for identifier, button in self.profile_buttons.items():
@@ -1047,6 +1326,8 @@ class MainWindow(QMainWindow):
             self.mode_combo.blockSignals(True)
             self.mode_combo.setCurrentIndex(combo_index)
             self.mode_combo.blockSignals(False)
+            if active is ProfileType.GIF and self._gif_profile_media is not None:
+                self._set_selected_media(self._gif_profile_media)
         self._set_state(self._state)
 
     @Slot(bool)
@@ -1171,6 +1452,7 @@ class MainWindow(QMainWindow):
         self.device_firmware.setText(f"Firmware {version}")
         self._set_state(AppState.READY)
         self._message(f"Connected to {self._identity.display_name if self._identity else 'device'}")
+        self._attempt_startup_resume()
 
     @Slot(str, str)
     def _operation_failed(self, action: str, message: str) -> None:
@@ -1182,6 +1464,7 @@ class MainWindow(QMainWindow):
         self._creative_lcd_media = None
         self._creative_lcd_presentations = ()
         self._initial_send_jpeg = None
+        self._pending_active_display = None
         self._set_state(AppState.ERROR)
         self._message(f"{action.capitalize()} failed: {message}")
         if action == "firmware":
@@ -1206,6 +1489,12 @@ class MainWindow(QMainWindow):
         if filename:
             self._selected_path = Path(filename)
             self._online_gif_data = None
+            if active is ProfileType.GIF:
+                try:
+                    self._selected_media_store.remove("gif-profile")
+                    self._profile_store.set_gif_selection_slot(self._profiles, None)
+                except (SelectedMediaStoreError, ProfileStoreError) as error:
+                    self._message(str(error))
             self._prepare_selected()
 
     @Slot()
@@ -1227,6 +1516,9 @@ class MainWindow(QMainWindow):
                         self._online_gif_data,
                         self._selected_media.title,
                         self.mode_combo.currentData(),
+                        creator=self._selected_media.creator,
+                        source_url=self._selected_media.source_url,
+                        attribution=self._selected_media.attribution or "Powered by GIPHY",
                     )
                 )
             except ImageProcessingError as error:
@@ -1289,6 +1581,10 @@ class MainWindow(QMainWindow):
         duration = f" • {media.duration_ms / 1000:.1f}s" if media.animated else ""
         self.preview_caption.setText(
             f"{media.title}\n{kind} • {media.width} × {media.height} • {media.frame_count} frame(s){duration}"
+            + (
+                f"\n{media.creator + ' • ' if media.creator else ''}{media.attribution}"
+                if media.attribution else ""
+            )
         )
 
     def _stop_preview(self) -> None:
@@ -1307,21 +1603,28 @@ class MainWindow(QMainWindow):
         dialog.exec()
         self._search_dialog = None
 
-    @Slot(bytes, str)
-    def _online_gif_selected(self, data: bytes, title: str) -> None:
+    @Slot(object)
+    def _online_gif_selected(self, selection: SelectedGif | bytes, title: str | None = None) -> None:
         if self._profiles.active_profile_id != ProfileType.GIF.value:
             self._message("Online GIF selection is available only in GIF mode")
             return
+        chosen = self._coerce_selected_gif(selection, title)
         try:
-            media = prepare_downloaded_gif(data, title, self.mode_combo.currentData())
+            media = self._prepare_persisted_selection(chosen, self.mode_combo.currentData())
         except ImageProcessingError as error:
             self._message(str(error))
             self._set_state(state_after_image_error(has_device=self._identity is not None))
             return
         self._selected_path = None
-        self._online_gif_data = data
+        self._online_gif_data = chosen.data
+        self._gif_profile_media = media
+        try:
+            self._selected_media_store.save("gif-profile", chosen)
+            self._profile_store.set_gif_selection_slot(self._profiles, "gif-profile")
+        except (SelectedMediaStoreError, ProfileStoreError) as error:
+            self._message(str(error))
         self._set_selected_media(media)
-        self._message(f"Prepared experimental online GIF: {title}")
+        self._message(f"Prepared GIPHY GIF: {chosen.title}")
         if self._identity is not None:
             self._set_state(AppState.DISPLAYING if self._session_touched_display else AppState.READY)
 
@@ -1334,6 +1637,7 @@ class MainWindow(QMainWindow):
             self._refresher.stop()
             self._gif_playback.stop()
             self._creative_playback.stop()
+            self._pending_active_display = self._active_display_candidate(active)
             self._session_touched_display = True
             self._set_state(AppState.SENDING)
             self._message("Starting volatile Orbit thermals…")
@@ -1349,60 +1653,18 @@ class MainWindow(QMainWindow):
             if (media is None and not preset["orbit_overlay"]["enabled"]
                     and not preset["telemetry_overlay"]["enabled"]):
                 return
-            self._refresher.stop()
-            self._gif_playback.stop()
-            self._orbit_playback.stop()
-            self._creative_playback.stop()
-            self._creative_lcd_preset = preset
-            self._creative_lcd_media = media
-            self._creative_lcd_presentations = tuple(deepcopy(self._telemetry_presentations.selected))
-            self._creative_measurements = []
-            self._creative_measurement_started = time.monotonic()
-            self._session_touched_display = True
-            self._set_state(AppState.SENDING)
-            dynamic = bool(media and media.animated) or (
-                preset["orbit_overlay"]["enabled"]
-                and preset["orbit_overlay"]["animation_enabled"]
-            ) or preset["telemetry_overlay"]["enabled"]
-            if dynamic:
-                self._message("Starting volatile Creative playback…")
-                self._creative_playback.start(
-                    media.gif if media else None,
-                    orbit_animated=(preset["orbit_overlay"]["enabled"]
-                                    and preset["orbit_overlay"]["animation_enabled"]),
-                    telemetry_enabled=preset["telemetry_overlay"]["enabled"],
-                )
-                return
-            background = self._creative_background(
-                media, preset["background"]["resize_strategy"]
-            )
-            jpeg = compose_creative_jpeg(
-                replace(self._creative_composition(preset, 0.0), background=background)
-            )
-            self._initial_send_jpeg = jpeg
-            self.send_requested.emit(jpeg)
+            self._pending_active_display = self._active_display_candidate(active)
+            self._message("Starting volatile Creative playback…")
+            self._start_creative_display(preset, media)
             return
         if self._selected_media is None or self._prepared_jpeg is None or self._identity is None:
             return
-        self._refresher.stop()
-        self._gif_playback.stop()
-        self._orbit_playback.stop()
-        self._creative_playback.stop()
-        if self._selected_media.animated and self._selected_media.gif is not None:
-            self._lcd_gif = self._selected_media.gif
-            self._lcd_strategy = str(self.mode_combo.currentData())
-            self._initial_send_jpeg = None
-            self._session_touched_display = True
-            self._set_state(AppState.SENDING)
-            self._message("Starting volatile GIF playback…")
-            self._gif_playback.start(self._lcd_gif)
-            return
-        self._lcd_gif = None
-        self._initial_send_jpeg = self._prepared_jpeg
-        self._session_touched_display = True
-        self._set_state(AppState.SENDING)
-        self._message("Sending one volatile image…")
-        self.send_requested.emit(self._prepared_jpeg)
+        self._pending_active_display = self._active_display_candidate(active)
+        self._message(
+            "Starting volatile GIF playback…" if self._selected_media.animated
+            else "Sending one volatile image…"
+        )
+        self._start_media_display(self._selected_media, str(self.mode_combo.currentData()))
 
     @Slot(int)
     def _image_sent(self, report_count: int) -> None:
@@ -1410,6 +1672,7 @@ class MainWindow(QMainWindow):
             self._operation_failed("send", "completed without a prepared refresh image")
             return
         self._refresher.start_after_initial_success(self._initial_send_jpeg)
+        self._record_successful_active_display()
         self._initial_send_jpeg = None
         self._set_state(AppState.DISPLAYING)
         self._message(f"Image displayed successfully ({report_count} reports)")
@@ -1435,6 +1698,7 @@ class MainWindow(QMainWindow):
             f"coalesced total {self._gif_playback.coalesced_frames}"
         )
         if first:
+            self._record_successful_active_display()
             self._message(f"GIF playback started ({report_count} reports)")
 
     @Slot(object)
@@ -1444,6 +1708,7 @@ class MainWindow(QMainWindow):
         self._orbit_measurements.append(stats)
         self._set_state(AppState.DISPLAYING)
         if first:
+            self._record_successful_active_display()
             self._message(
                 f"Orbit thermals started ({stats.report_count} reports, {stats.jpeg_bytes} bytes, "
                 f"{stats.total_seconds * 1000:.1f} ms total)"
@@ -1488,6 +1753,7 @@ class MainWindow(QMainWindow):
         self._creative_measurements.append(stats)
         self._set_state(AppState.DISPLAYING)
         if first:
+            self._record_successful_active_display()
             self._message(
                 f"Creative playback started ({stats.report_count} reports, "
                 f"{stats.total_seconds * 1000:.1f} ms)"

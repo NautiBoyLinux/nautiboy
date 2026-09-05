@@ -37,6 +37,7 @@ def default_creative_preset(identifier: str) -> dict[str, Any]:
             "media_kind": None,
             "source_path": None,
             "resize_strategy": "fit",
+            "selected_giphy_slot": None,
         },
         "orbit_overlay": {
             "enabled": False,
@@ -57,7 +58,7 @@ def default_creative_preset(identifier: str) -> dict[str, Any]:
 DEFAULT_SETTINGS: dict[ProfileType, dict[str, Any]] = {
     ProfileType.THERMALS: {},
     ProfileType.IMAGE: {"resize_strategy": "fit"},
-    ProfileType.GIF: {"resize_strategy": "fit"},
+    ProfileType.GIF: {"resize_strategy": "fit", "selected_giphy_slot": None},
     ProfileType.CREATIVE: {
         "active_preset_id": "preset_1",
         "presets": [default_creative_preset(identifier) for identifier in CREATIVE_PRESET_IDS],
@@ -88,6 +89,10 @@ def _settings(profile_type: ProfileType, value: object) -> dict[str, Any]:
     if profile_type in {ProfileType.IMAGE, ProfileType.GIF}:
         if result.get("resize_strategy") not in {"fit", "center-crop"}:
             result["resize_strategy"] = "fit"
+    if profile_type is ProfileType.GIF and result.get("selected_giphy_slot") not in {
+        None, "gif-profile"
+    }:
+        result["selected_giphy_slot"] = None
     return result
 
 
@@ -107,6 +112,9 @@ def _creative_preset(identifier: str, supplied: object) -> dict[str, Any]:
         background["source_path"] = None
     if background.get("resize_strategy") not in {"fit", "center-crop"}:
         background["resize_strategy"] = "fit"
+    expected_slot = f"creative-{identifier}"
+    if background.get("selected_giphy_slot") not in {None, expected_slot}:
+        background["selected_giphy_slot"] = None
     overlay = preset["telemetry_overlay"]
     if not isinstance(overlay.get("enabled"), bool):
         overlay["enabled"] = False

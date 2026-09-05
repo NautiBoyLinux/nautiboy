@@ -77,6 +77,12 @@ class ProfileStore:
         state.profile(identifier).settings["resize_strategy"] = strategy
         self.save(state)
 
+    def set_gif_selection_slot(self, state: ProfileState, slot: str | None) -> None:
+        if slot not in {None, "gif-profile"}:
+            raise ValueError("unsupported GIF profile selected-media slot")
+        state.profile(ProfileType.GIF.value).settings["selected_giphy_slot"] = slot
+        self.save(state)
+
     def set_active_creative_preset(self, state: ProfileState, identifier: str) -> None:
         if identifier not in CREATIVE_PRESET_IDS:
             raise ValueError(f"unknown Creative preset: {identifier}")

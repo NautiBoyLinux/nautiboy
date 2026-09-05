@@ -1,11 +1,10 @@
 # Branding assets
 
-The application name is **NautiBoy** and the provisional application ID is
-`io.github.nautiboy.nautiboy`. The normalized ID is used consistently for the
+The application name is **NautiBoy** and the final application ID is
+`io.github.nautiboylinux.nautiboy`. The normalized ID is used consistently for the
 desktop entry, AppStream component, icons, autostart entry, and per-user
-single-instance identity. The `io.github` namespace remains provisional and
-must be reviewed against the final public
-GitHub namespace before release.
+single-instance identity. It is derived from the project-owned
+`NautiBoyLinux/nautiboy` GitHub namespace.
 
 `src/nautiboy/assets/logo-reference-original.png` is an unchanged copy of the
 supplied 345×358 raster concept. `packaging/generate_icons.py` center-crops it to

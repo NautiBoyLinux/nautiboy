@@ -20,6 +20,9 @@ class PreparedMedia:
     preview_jpeg: bytes
     static_jpeg: bytes | None = None
     gif: GifDocument | None = None
+    creator: str | None = None
+    source_url: str | None = None
+    attribution: str | None = None
 
     @property
     def animated(self) -> bool:
@@ -52,10 +55,21 @@ def prepare_local_media(path: str | Path, strategy: ResizeStrategy | str) -> Pre
     return PreparedMedia(selected.name, str(selected), width, height, jpeg, static_jpeg=jpeg)
 
 
-def prepare_downloaded_gif(data: bytes, title: str, strategy: ResizeStrategy | str) -> PreparedMedia:
+def prepare_downloaded_gif(
+    data: bytes,
+    title: str,
+    strategy: ResizeStrategy | str,
+    *,
+    creator: str | None = None,
+    source_url: str | None = None,
+    attribution: str = "Powered by GIPHY",
+) -> PreparedMedia:
     try:
         document = inspect_gif(data)
         _rendered, preview = document.render_frame(0, strategy)
     except GifProcessingError as error:
         raise ImageProcessingError(str(error)) from error
-    return PreparedMedia(title, "GIPHY session media", document.width, document.height, preview, gif=document)
+    return PreparedMedia(
+        title, "GIPHY selected media", document.width, document.height, preview,
+        gif=document, creator=creator, source_url=source_url, attribution=attribution,
+    )

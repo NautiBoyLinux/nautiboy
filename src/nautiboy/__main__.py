@@ -9,7 +9,7 @@ from typing import Callable
 from PySide6.QtCore import QStandardPaths
 from PySide6.QtWidgets import QApplication
 
-from .branding import APP_ID, APP_NAME, application_icon
+from .branding import APP_ID, APP_NAME, ORGANIZATION_DOMAIN, application_icon
 from .desktop_shortcut import DesktopShortcutError, DesktopShortcutManager
 from .gui.main_window import MainWindow
 from .gui.tray import TrayController
@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setOrganizationName("NautiBoy community")
-    app.setOrganizationDomain("io.github.nautiboy")
+    app.setOrganizationDomain(ORGANIZATION_DOMAIN)
     desktop_file = QStandardPaths.locate(
         QStandardPaths.StandardLocation.ApplicationsLocation,
         f"{APP_ID}.desktop",

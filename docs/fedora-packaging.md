@@ -28,7 +28,7 @@ After quitting NautiBoy normally, a user may remove those explicitly with:
 
 ```bash
 nautiboy --remove-desktop-shortcut
-rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/io.github.nautiboy.nautiboy.desktop"
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/io.github.nautiboylinux.nautiboy.desktop"
 rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/nautiboy"
 rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/nautiboy"
 ```
@@ -37,9 +37,8 @@ The two recursive commands target only NautiBoy's exact per-user directories
 and must be run as the desktop user, never with sudo. They are documentation,
 not RPM uninstall scriptlets.
 
-The application ID is `io.github.nautiboy.nautiboy`. Its `io.github` namespace
-remains provisional until the final public GitHub namespace and repository are
-established.
+The application ID is `io.github.nautiboylinux.nautiboy`, derived from the
+project-owned `NautiBoyLinux/nautiboy` GitHub namespace.
 
 All package-owned system files are declared as `root:root` with the standard
 RPM `%defattr(-,root,root,-)` file-list directive. This is harmless explicit

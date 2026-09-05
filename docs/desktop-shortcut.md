@@ -20,6 +20,10 @@ Remove it with:
 nautiboy --remove-desktop-shortcut
 ```
 
-Removal targets only `io.github.nautiboy.nautiboy.desktop` in the resolved XDG
+Removal targets only `io.github.nautiboylinux.nautiboy.desktop` in the resolved XDG
 Desktop directory and refuses to delete a same-named file without NautiBoy's
 ownership marker.
+
+Creating or removing the shortcut also cleans up the provisional development
+filename `io.github.nautiboy.nautiboy.desktop`, but only when that file carries
+the same NautiBoy ownership marker.

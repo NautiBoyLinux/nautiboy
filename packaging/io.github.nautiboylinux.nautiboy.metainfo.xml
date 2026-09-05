@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.nautiboy.nautiboy</id>
+  <id>io.github.nautiboylinux.nautiboy</id>
   <name>NautiBoy</name>
   <summary>Linux controller for Corsair NAUTILUS RS LCD displays</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <developer id="io.github.nautiboy">
-    <name>NautiBoy contributors</name>
+  <developer id="io.github.nautiboylinux">
+    <name>Andrew Tyler</name>
   </developer>
   <description>
     <p>NautiBoy is an open-source Linux controller for Corsair NAUTILUS RS LCD displays.</p>
     <p>NautiBoy is an unofficial community project and is not affiliated with, endorsed by, or supported by Corsair.</p>
   </description>
-  <url type="homepage">https://github.com/nautiboy/nautiboy</url>
-  <url type="vcs-browser">https://github.com/nautiboy/nautiboy</url>
-  <launchable type="desktop-id">io.github.nautiboy.nautiboy.desktop</launchable>
+  <url type="homepage">https://github.com/NautiBoyLinux/nautiboy</url>
+  <url type="vcs-browser">https://github.com/NautiBoyLinux/nautiboy</url>
+  <url type="bugtracker">https://github.com/NautiBoyLinux/nautiboy/issues</url>
+  <launchable type="desktop-id">io.github.nautiboylinux.nautiboy.desktop</launchable>
   <content_rating type="oars-1.1" />
   <releases>
     <release version="0.2.0" date="2026-09-04" type="development">

@@ -5,7 +5,10 @@ from __future__ import annotations
 import os
 from typing import Protocol
 
-SERVICE_NAME = "io.github.nautiboy.nautiboy"
+from .branding import APP_ID, LEGACY_APP_IDS
+
+SERVICE_NAME = APP_ID
+LEGACY_SERVICE_NAMES = LEGACY_APP_IDS
 GIPHY_ACCOUNT = "giphy-api-key"
 GIPHY_ENVIRONMENT_VARIABLE = "NAUTIBOY_GIPHY_API_KEY"
 
@@ -41,7 +44,26 @@ class GiphyCredentialStore:
             value = self.backend.get_password(SERVICE_NAME, GIPHY_ACCOUNT)
         except Exception as error:
             raise CredentialError("could not access desktop secret storage") from error
-        return value.strip() if value and value.strip() else None
+        if value and value.strip():
+            return value.strip()
+
+        # Development builds used the provisional application ID as their
+        # Secret Service name. Move that item entirely within the keyring.
+        for legacy_service in LEGACY_SERVICE_NAMES:
+            try:
+                legacy_value = self.backend.get_password(legacy_service, GIPHY_ACCOUNT)
+            except Exception as error:
+                raise CredentialError("could not access desktop secret storage") from error
+            if not legacy_value or not legacy_value.strip():
+                continue
+            migrated_value = legacy_value.strip()
+            try:
+                self.backend.set_password(SERVICE_NAME, GIPHY_ACCOUNT, migrated_value)
+                self._delete_from_service(legacy_service)
+            except Exception as error:
+                raise CredentialError("could not migrate the stored GIPHY API key") from error
+            return migrated_value
+        return None
 
     def save(self, value: str) -> None:
         value = value.strip()
@@ -49,16 +71,25 @@ class GiphyCredentialStore:
             raise CredentialError("enter a GIPHY API key before saving")
         try:
             self.backend.set_password(SERVICE_NAME, GIPHY_ACCOUNT, value)
+            for legacy_service in LEGACY_SERVICE_NAMES:
+                self._delete_from_service(legacy_service)
         except Exception as error:
             raise CredentialError("could not save to desktop secret storage") from error
 
     def delete(self) -> None:
         try:
-            self.backend.delete_password(SERVICE_NAME, GIPHY_ACCOUNT)
+            self._delete_from_service(SERVICE_NAME)
+            for legacy_service in LEGACY_SERVICE_NAMES:
+                self._delete_from_service(legacy_service)
         except Exception as error:
-            # keyring backends use backend-specific exceptions for a missing item.
+            raise CredentialError("could not remove the stored GIPHY API key") from error
+
+    def _delete_from_service(self, service: str) -> None:
+        try:
+            self.backend.delete_password(service, GIPHY_ACCOUNT)
+        except Exception as error:
             if error.__class__.__name__ != "PasswordDeleteError":
-                raise CredentialError("could not remove the stored GIPHY API key") from error
+                raise
 
     def configured(self) -> bool:
         return self.retrieve() is not None

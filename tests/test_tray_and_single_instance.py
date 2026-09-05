@@ -127,3 +127,18 @@ def test_second_instance_exits_before_creating_an_owner(monkeypatch) -> None:
     assert not secondary.acquire()
     assert notifications == [(True, 300)]
     assert secondary._server is None
+
+
+def test_legacy_identity_owner_prevents_second_hid_owner(monkeypatch) -> None:
+    secondary = SingleInstance()
+    notifications = []
+    legacy_name = secondary.legacy_names[0]
+
+    def notify(*, activate, timeout_ms=300, name=None):
+        notifications.append((activate, name))
+        return name == legacy_name
+
+    monkeypatch.setattr(secondary, "_notify_existing", notify)
+    assert not secondary.acquire()
+    assert notifications == [(True, legacy_name)]
+    assert secondary._server is None

@@ -11,7 +11,7 @@ from nautiboy.autostart import AutostartError, AutostartManager, UserPreferences
 from nautiboy.credentials import CredentialError, GiphyCredentialStore
 
 PREFERENCES_MINIMUM_WIDTH = 420
-PREFERENCES_MINIMUM_HEIGHT = 430
+PREFERENCES_MINIMUM_HEIGHT = 500
 
 
 class PreferencesDialog(QDialog):
@@ -30,6 +30,12 @@ class PreferencesDialog(QDialog):
         self.setWindowTitle("NautiBoy Preferences")
         self.setMinimumSize(PREFERENCES_MINIMUM_WIDTH, PREFERENCES_MINIMUM_HEIGHT)
         self.resize(PREFERENCES_MINIMUM_WIDTH, PREFERENCES_MINIMUM_HEIGHT)
+        try:
+            self.manager.migrate_legacy()
+        except AutostartError:
+            # Leave an inaccessible legacy entry untouched; saving preferences
+            # will surface a concrete error through the normal UI path.
+            pass
         layout = QVBoxLayout(self)
         self.launch_at_login = QCheckBox("Launch NautiBoy at login")
         self.start_minimized = QCheckBox("Start minimized to system tray")
@@ -43,10 +49,20 @@ class PreferencesDialog(QDialog):
         layout.addWidget(self.launch_at_login)
         layout.addWidget(self.start_minimized)
         note = QLabel(
-            "Background startup performs device discovery but never sends media or changes the LCD."
+            "Background startup performs safe device discovery. It changes the LCD only when "
+            "Resume last display is separately enabled."
         )
         note.setWordWrap(True)
         layout.addWidget(note)
+        self.resume_last_display = QCheckBox("Resume last display on launch")
+        self.resume_last_display.setChecked(self.preferences.resume_last_display())
+        layout.addWidget(self.resume_last_display)
+        resume_note = QLabel(
+            "After the supported LCD is detected, NautiBoy can restore the last display "
+            "that was successfully sent. This is independent of login startup."
+        )
+        resume_note.setWordWrap(True)
+        layout.addWidget(resume_note)
         giphy = QGroupBox("GIPHY (experimental)")
         giphy_layout = QVBoxLayout(giphy)
         self.giphy_status = QLabel()
@@ -102,6 +118,7 @@ class PreferencesDialog(QDialog):
         try:
             minimized = self.start_minimized.isChecked()
             self.preferences.set_start_minimized(minimized)
+            self.preferences.set_resume_last_display(self.resume_last_display.isChecked())
             if self.launch_at_login.isChecked():
                 self.manager.enable(background=minimized)
             else:

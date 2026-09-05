@@ -12,8 +12,8 @@
 - Added optional per-user XDG graphical-session autostart with background mode.
 - Standardized window, launcher, tray, and notification branding on one bundled
   multi-resolution NautiBoy icon loader.
-- Normalized the provisional reverse-DNS application ID to
-  `io.github.nautiboy.nautiboy` before public release.
+- Migrated the reverse-DNS application ID to
+  `io.github.nautiboylinux.nautiboy` after securing the public GitHub namespace.
 - Added explicit XDG Desktop shortcut create/remove commands and Fedora RPM
   packaging infrastructure.
 - Validated Fedora RPM installation, normal-user udev access, uninstall,

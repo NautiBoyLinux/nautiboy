@@ -7,7 +7,11 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QIcon
 
 APP_NAME = "NautiBoy"
-APP_ID = "io.github.nautiboy.nautiboy"
+APP_ID = "io.github.nautiboylinux.nautiboy"
+ORGANIZATION_DOMAIN = "io.github.nautiboylinux"
+LEGACY_APP_IDS = ("io.github.nautiboy.nautiboy",)
+PROJECT_URL = "https://github.com/NautiBoyLinux/nautiboy"
+ISSUES_URL = f"{PROJECT_URL}/issues"
 APP_DESCRIPTION = "NautiBoy is an open-source Linux controller for Corsair NAUTILUS RS LCD displays."
 DISCLAIMER = (
     "NautiBoy is an unofficial community project and is not affiliated with, "

@@ -32,6 +32,33 @@ def test_disable_removes_only_nautiboy_entry(tmp_path: Path, monkeypatch) -> Non
     assert unrelated.read_text() == "keep"
 
 
+def test_owned_legacy_autostart_is_migrated_without_touching_unrelated(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    manager = AutostartManager()
+    legacy = manager.path.parent / autostart.LEGACY_AUTOSTART_FILENAMES[0]
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(autostart.desktop_entry(background=True))
+    unrelated = legacy.parent / "other.desktop"
+    unrelated.write_text("unrelated")
+
+    assert manager.migrate_legacy()
+    assert manager.enabled()
+    assert not legacy.exists()
+    assert unrelated.read_text() == "unrelated"
+
+
+def test_unowned_legacy_autostart_is_left_untouched(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    manager = AutostartManager()
+    legacy = manager.path.parent / autostart.LEGACY_AUTOSTART_FILENAMES[0]
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("unrelated")
+    assert not manager.migrate_legacy()
+    assert legacy.read_text() == "unrelated"
+
+
 def test_xdg_config_home_and_default_fallback(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert autostart.config_home() == tmp_path

@@ -74,6 +74,14 @@ def test_creative_editor_has_explicit_vertical_scrollbar(monkeypatch, tmp_path: 
         window.close()
 
 
+def test_creative_giphy_button_uses_clean_label(monkeypatch, tmp_path: Path) -> None:
+    window = _window(monkeypatch, tmp_path)
+    try:
+        assert window.creative_giphy_button.text() == "Search GIPHY"
+    finally:
+        window.close()
+
+
 def test_main_window_opens_at_requested_height(monkeypatch, tmp_path: Path) -> None:
     window = _window(monkeypatch, tmp_path)
     try:
@@ -153,7 +161,7 @@ def test_creative_restore_reports_bounded_measurement_summary(monkeypatch, tmp_p
         window.close()
 
 
-def test_creative_giphy_selection_is_session_only_isolated_and_zero_hid(monkeypatch, tmp_path: Path) -> None:
+def test_creative_giphy_selection_is_persisted_isolated_and_zero_hid(monkeypatch, tmp_path: Path) -> None:
     window = _window(monkeypatch, tmp_path)
     events = []
     window.send_requested.connect(lambda *_: events.append("send"))
@@ -171,7 +179,8 @@ def test_creative_giphy_selection_is_session_only_isolated_and_zero_hid(monkeypa
         window._creative_preset_clicked(1)
         assert "preset_2" not in window._creative_media
         document = (tmp_path / "profiles.json").read_text()
-        assert "Neon Cat" not in document and "GIPHY" not in document
+        assert "Neon Cat" not in document and "credential" not in document
+        assert '"selected_giphy_slot": "creative-preset_1"' in document
     finally:
         window.close()
 

@@ -10,6 +10,7 @@ from nautiboy.branding import (
     APP_DESCRIPTION,
     APP_ID,
     APP_NAME,
+    ORGANIZATION_DOMAIN,
     DISCLAIMER,
     application_icon,
     application_icon_paths,
@@ -31,7 +32,8 @@ from test_credentials import FakeKeyring
 
 def test_public_brand_identity() -> None:
     assert APP_NAME == "NautiBoy"
-    assert APP_ID == "io.github.nautiboy.nautiboy"
+    assert APP_ID == "io.github.nautiboylinux.nautiboy"
+    assert ORGANIZATION_DOMAIN == "io.github.nautiboylinux"
     assert APP_DESCRIPTION == (
         "NautiBoy is an open-source Linux controller for Corsair NAUTILUS RS LCD displays."
     )

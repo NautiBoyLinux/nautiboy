@@ -26,6 +26,8 @@ by, or supported by Corsair.
 - KDE/Linux system tray with background playback, Restore, and safe Quit
 - Per-user single-instance activation through a Qt local socket
 - Optional per-user XDG login startup, hidden to tray by default
+- Opt-in one-shot resume of the last successfully active display after safe
+  device validation
 - Four persistent functional modes and four renameable Creative sub-presets
 - Read-only Linux temperature discovery and two-item Thermals configuration
 - Normal-user operation through a narrowly scoped `uaccess` rule
@@ -102,7 +104,7 @@ If login startup was enabled, also disable it in NautiBoy before removal or
 remove only its user entry:
 
 ```bash
-rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/io.github.nautiboy.nautiboy.desktop"
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/io.github.nautiboylinux.nautiboy.desktop"
 ```
 
 NautiBoy does not install a service, write controller-side profiles, or place
@@ -116,12 +118,13 @@ content in the LCD's persistent storage.
   without it
 - No CPU/GPU monitoring screens
 - NautiBoy must remain running to maintain volatile software display
-- Functional profiles do not yet persist selected media paths or content
+- Explicitly chosen GIPHY media persists per GIF mode/Creative preset; search
+  results and thumbnails remain transient
 - No persistent controller storage access
 - No brightness, rotation, or frame-rate controls
 - No pump, fan, RGB, or firmware operations
 - Only the hardware configuration listed above has been physically validated
-- The application ID is provisional and the current icon is a development raster
+- The current icon is a development raster
 
 A final square SVG or transparent 1024×1024 icon master is desired before a
 polished public release.
@@ -155,9 +158,12 @@ key is never stored in NautiBoy settings, source files, logs, or media cache.
 Without a key, GIF Search explains that it is not configured while all local
 media features remain available.
 
-GIPHY media is session-only and is not written to NautiBoy's persistent cache.
-The search dialog displays “Powered by GIPHY” plus creator/source information
-when available. Public distribution or enablement remains unresolved pending
+Search results and thumbnails are session-only. A GIF explicitly chosen with
+**Use GIF** is retained in NautiBoy's per-user XDG data directory so GIF mode
+and independent Creative presets can restore their selection after a restart;
+restoration never sends to the LCD. The search dialog and restored selection
+display “Powered by GIPHY” plus creator/source information when available.
+Public distribution or enablement remains unresolved pending
 clarification of GIPHY licensing, attribution, and external-display use,
 including the policy implications of showing selected media on an LCD without
 attribution on that physical display.
@@ -189,9 +195,10 @@ See:
 - [Per-user autostart](docs/autostart.md)
 - [Development and tests](docs/development.md)
 
-The reverse-DNS application ID is `io.github.nautiboy.nautiboy`. The
-`io.github` namespace remains provisional until the final public GitHub account
-and repository location are established.
+The reverse-DNS application ID is `io.github.nautiboylinux.nautiboy`, derived
+from the project-owned [NautiBoyLinux GitHub organization](https://github.com/NautiBoyLinux).
+Support and bug reports are handled through the
+[repository Issues page](https://github.com/NautiBoyLinux/nautiboy/issues).
 
 ## License and attribution
 

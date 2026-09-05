@@ -18,6 +18,15 @@ class GifResult:
 
 
 @dataclass(frozen=True, slots=True)
+class SelectedGif:
+    """A provider result explicitly chosen and downloaded by the user."""
+
+    data: bytes
+    result: GifResult
+    attribution: str
+
+
+@dataclass(frozen=True, slots=True)
 class SearchPage:
     results: tuple[GifResult, ...]
     next_page: str | None = None

@@ -52,6 +52,16 @@ long-held frame is retransmitted at the existing 1,000 ms keepalive interval.
 The selected preview and active LCD media are separate snapshots: selecting new
 media never changes the LCD until Send is pressed.
 
+The last-used profile and Creative preset are always restored as UI state. A
+separate versioned `last-active-display.json` is updated only after the first
+hardware transfer for a manual Send succeeds. GIPHY content that becomes active
+is copied into a dedicated immutable app-owned slot, so a later unsent selection
+cannot replace the resume target. The opt-in **Resume last display on launch**
+preference defaults off. When enabled, startup waits for supported-device setup
+and a successful firmware read, validates all referenced media locally, and
+starts at most one display session. Failure is non-retrying and leaves hardware
+mode untouched. No provider or network request participates in resume.
+
 The four fixed profile modes are Thermals, Image, GIF, and Creative. Profile
 selection and Image/GIF resize strategies persist in
 `$XDG_CONFIG_HOME/nautiboy/profiles.json`. Switching modes changes UI state
@@ -79,10 +89,14 @@ Orbit phase, and approximately 1 Hz telemetry snapshots without queuing stale
 frames or allowing concurrent transfers. Merely previewing or browsing profiles
 and presets performs no HID operation.
 
-Online search is not a prerequisite for local media. GIPHY downloads live only
-for the current session because standard GIPHY integrations may not persistently
-cache media without approval. The generic XDG cache implementation is reserved
-for providers whose terms allow persistent caching.
+Online search is not a prerequisite for local media. Search pages, thumbnails,
+and unselected GIPHY results remain session-only. A distinct selected-media
+store retains only GIFs the user explicitly chooses, using fixed app-owned slots
+under the final application ID in XDG data storage. Profiles contain only the
+slot reference; the GIF and minimal provider/title/creator/source/integrity
+metadata remain separate from settings and credentials. Restoration rebuilds
+preview state only and never enters volatile LCD mode. The generic XDG cache
+implementation remains reserved for providers whose terms allow broad caching.
 
 The optional GIPHY credential is resolved from the process environment first,
 then from the desktop keyring through Python keyring and Freedesktop Secret

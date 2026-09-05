@@ -42,6 +42,22 @@ def test_remove_deletes_only_owned_shortcut(shortcut_locations) -> None:
     assert not DesktopShortcutManager().remove()
 
 
+def test_create_removes_only_owned_legacy_shortcut(shortcut_locations) -> None:
+    desktop, _source = shortcut_locations
+    legacy = desktop / shortcut.LEGACY_SHORTCUT_FILENAMES[0]
+    legacy.write_text(f"[Desktop Entry]\n{OWNERSHIP_MARKER}\n")
+    DesktopShortcutManager().create()
+    assert not legacy.exists()
+
+
+def test_unowned_legacy_shortcut_is_preserved(shortcut_locations) -> None:
+    desktop, _source = shortcut_locations
+    legacy = desktop / shortcut.LEGACY_SHORTCUT_FILENAMES[0]
+    legacy.write_text("unrelated")
+    DesktopShortcutManager().create()
+    assert legacy.read_text() == "unrelated"
+
+
 def test_create_and_remove_refuse_unowned_file(shortcut_locations) -> None:
     desktop, _source = shortcut_locations
     path = desktop / shortcut.SHORTCUT_FILENAME

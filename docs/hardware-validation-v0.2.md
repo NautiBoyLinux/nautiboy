@@ -124,7 +124,7 @@ Installed-package runtime validation passed for static JPEG playback, local
 animated GIF playback, hardware-mode restoration, close-to-tray playback,
 tray reopen/restore, single-instance behavior, and per-user autostart creation
 and removal. Autostart used the lowercase
-`io.github.nautiboy.nautiboy.desktop` entry with `nautiboy --background` and did
+`io.github.nautiboylinux.nautiboy.desktop` entry with `nautiboy --background` and did
 not transmit media.
 
 DNF uninstall removed every one of the 182 recorded package-owned paths and

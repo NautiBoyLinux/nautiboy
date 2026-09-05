@@ -13,11 +13,11 @@ from PySide6.QtWidgets import (
 )
 
 from nautiboy.network.worker import NetworkWorker
-from nautiboy.providers.base import GifProvider, GifResult, SearchPage
+from nautiboy.providers.base import GifProvider, GifResult, SearchPage, SelectedGif
 
 
 class GifSearchDialog(QDialog):
-    media_selected = Signal(bytes, str)
+    media_selected = Signal(object)
     network_get = Signal(str, str, str)
     cancel_network = Signal()
 
@@ -204,7 +204,7 @@ class GifSearchDialog(QDialog):
             movie.start()
             self._movies.append((buffer, movie))
         elif kind == "original" and isinstance(value, GifResult):
-            self.media_selected.emit(data, value.title)
+            self.media_selected.emit(SelectedGif(data, value, self.provider.attribution))
             self.accept()
 
     @Slot(str, str)

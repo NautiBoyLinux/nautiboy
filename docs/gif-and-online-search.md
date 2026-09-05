@@ -19,8 +19,18 @@ is not stored in NautiBoy settings, displayed, or logged. Search metadata and me
 are cancellable, require HTTPS and expected content types, and enforce response
 size limits.
 
-GIPHY results remain in memory for the session and are never placed in the XDG
-media cache. Attribution remains visible in the search interface. The remaining
+Browsing, trending results, thumbnails, and search responses remain transient
+and are never placed in a persistent generic cache. When the user explicitly
+chooses a GIPHY result with **Use GIF**, NautiBoy stores only that selected GIF
+and minimal attribution/integrity metadata under
+`$XDG_DATA_HOME/io.github.nautiboylinux.nautiboy/selected-media/` (falling back
+to `~/.local/share`). GIF mode owns one deterministic slot and each Creative
+preset owns one independent slot. Replacements overwrite only their own slot;
+choosing local media removes the corresponding selected-GIPHY slot. Missing or
+corrupt stored media is ignored safely and never causes an automatic LCD send.
+No credential or search-response payload is stored with selected media.
+
+Attribution remains visible in the search interface and restored media UI. The remaining
 public-release gate is an acceptable production credential/distribution model
 for an open-source Linux desktop application, together with confirmed licensing,
 attribution, and external-LCD-use terms. No personal or beta API key may be
@@ -28,6 +38,12 @@ embedded in source, packages, or application defaults. Credential resolution
 remains, in order: the process-only `NAUTIBOY_GIPHY_API_KEY` override, the
 desktop keyring, then unconfigured. A proxy or hosted backend is not part of
 this milestone and must not be introduced without a separate design decision.
+
+On first credential access after the public-namespace migration, NautiBoy looks
+for the current Secret Service name first. If it is absent and the provisional
+development service `io.github.nautiboy.nautiboy` contains a key, NautiBoy
+writes that value under `io.github.nautiboylinux.nautiboy` and removes the old
+keyring item. The value never leaves Secret Service or enters settings/logs.
 
 Current provider references:
 

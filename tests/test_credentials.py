@@ -5,6 +5,7 @@ import pytest
 from nautiboy.credentials import (
     GIPHY_ACCOUNT,
     GIPHY_ENVIRONMENT_VARIABLE,
+    LEGACY_SERVICE_NAMES,
     SERVICE_NAME,
     CredentialError,
     GiphyCredentialStore,
@@ -34,6 +35,24 @@ def test_secure_store_save_retrieve_and_delete() -> None:
     assert store.retrieve() == "fake-secret"
     store.delete()
     assert store.retrieve() is None
+
+
+def test_legacy_service_key_is_migrated_only_within_keyring() -> None:
+    backend = FakeKeyring()
+    legacy_service = LEGACY_SERVICE_NAMES[0]
+    backend.items[(legacy_service, GIPHY_ACCOUNT)] = "legacy-fake-secret"
+    store = GiphyCredentialStore(backend)
+
+    assert store.retrieve() == "legacy-fake-secret"
+    assert backend.items == {(SERVICE_NAME, GIPHY_ACCOUNT): "legacy-fake-secret"}
+
+
+def test_delete_removes_current_and_legacy_service_keys() -> None:
+    backend = FakeKeyring()
+    backend.items[(SERVICE_NAME, GIPHY_ACCOUNT)] = "current-fake"
+    backend.items[(LEGACY_SERVICE_NAMES[0], GIPHY_ACCOUNT)] = "legacy-fake"
+    GiphyCredentialStore(backend).delete()
+    assert backend.items == {}
 
 
 def test_environment_key_overrides_secure_store(monkeypatch: pytest.MonkeyPatch) -> None:

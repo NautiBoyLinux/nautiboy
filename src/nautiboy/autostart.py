@@ -6,9 +6,10 @@ import configparser
 import os
 from pathlib import Path
 
-from .branding import APP_ID, APP_NAME
+from .branding import APP_ID, APP_NAME, LEGACY_APP_IDS
 
 AUTOSTART_FILENAME = f"{APP_ID}.desktop"
+LEGACY_AUTOSTART_FILENAMES = tuple(f"{app_id}.desktop" for app_id in LEGACY_APP_IDS)
 SETTINGS_FILENAME = "settings.ini"
 
 
@@ -60,6 +61,40 @@ class AutostartManager:
             and ("Exec=nautiboy --background\n" in content or "Exec=nautiboy\n" in content)
         )
 
+    def _legacy_paths(self) -> tuple[Path, ...]:
+        return tuple(self.path.parent / filename for filename in LEGACY_AUTOSTART_FILENAMES)
+
+    @staticmethod
+    def _owned(path: Path) -> bool:
+        try:
+            return "X-NautiBoy-Autostart=true\n" in path.read_text(encoding="utf-8")
+        except OSError:
+            return False
+
+    def _remove_owned_legacy_entries(self) -> None:
+        for path in self._legacy_paths():
+            if self._owned(path):
+                path.unlink(missing_ok=True)
+
+    def migrate_legacy(self) -> bool:
+        """Rename an owned development autostart entry without touching others."""
+        if self.path.exists():
+            try:
+                self._remove_owned_legacy_entries()
+            except OSError as error:
+                raise AutostartError(f"cannot migrate autostart: {error}") from error
+            return False
+        for path in self._legacy_paths():
+            if not self._owned(path):
+                continue
+            try:
+                background = "Exec=nautiboy --background\n" in path.read_text(encoding="utf-8")
+                self.enable(background=background)
+            except OSError as error:
+                raise AutostartError(f"cannot migrate autostart: {error}") from error
+            return True
+        return False
+
     def entry_starts_in_background(self) -> bool | None:
         if not self.enabled():
             return None
@@ -76,6 +111,7 @@ class AutostartManager:
             temporary.write_text(desktop_entry(background=background), encoding="utf-8")
             temporary.chmod(0o644)
             temporary.replace(path)
+            self._remove_owned_legacy_entries()
         except OSError as error:
             try:
                 temporary.unlink(missing_ok=True)
@@ -86,27 +122,27 @@ class AutostartManager:
     def disable(self) -> None:
         try:
             self.path.unlink(missing_ok=True)
+            self._remove_owned_legacy_entries()
         except OSError as error:
             raise AutostartError(f"cannot disable autostart: {error}") from error
 
 
 class UserPreferences:
-    """Store only the background-start preference; autostart state is not cached."""
+    """Small atomic user preference document; autostart state itself is not cached."""
 
-    def start_minimized(self) -> bool:
-        path = settings_path()
+    @staticmethod
+    def _read() -> configparser.ConfigParser:
         parser = configparser.ConfigParser()
         try:
-            parser.read(path, encoding="utf-8")
-            return parser.getboolean("autostart", "start_minimized", fallback=True)
+            parser.read(settings_path(), encoding="utf-8")
         except (OSError, configparser.Error, ValueError):
-            return True
+            return configparser.ConfigParser()
+        return parser
 
-    def set_start_minimized(self, enabled: bool) -> None:
+    @staticmethod
+    def _write(parser: configparser.ConfigParser) -> None:
         path = settings_path()
         temporary = path.with_name(f".{path.name}.tmp")
-        parser = configparser.ConfigParser()
-        parser["autostart"] = {"start_minimized": "true" if enabled else "false"}
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with temporary.open("w", encoding="utf-8") as stream:
@@ -114,8 +150,31 @@ class UserPreferences:
             temporary.chmod(0o600)
             temporary.replace(path)
         except OSError as error:
-            try:
-                temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
+            temporary.unlink(missing_ok=True)
             raise AutostartError(f"cannot save preference: {error}") from error
+
+    def start_minimized(self) -> bool:
+        try:
+            return self._read().getboolean("autostart", "start_minimized", fallback=True)
+        except ValueError:
+            return True
+
+    def set_start_minimized(self, enabled: bool) -> None:
+        parser = self._read()
+        if not parser.has_section("autostart"):
+            parser.add_section("autostart")
+        parser.set("autostart", "start_minimized", "true" if enabled else "false")
+        self._write(parser)
+
+    def resume_last_display(self) -> bool:
+        try:
+            return self._read().getboolean("display", "resume_last_display", fallback=False)
+        except ValueError:
+            return False
+
+    def set_resume_last_display(self, enabled: bool) -> None:
+        parser = self._read()
+        if not parser.has_section("display"):
+            parser.add_section("display")
+        parser.set("display", "resume_last_display", "true" if enabled else "false")
+        self._write(parser)

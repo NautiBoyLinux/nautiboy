@@ -8,9 +8,10 @@ from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
 
-from .branding import APP_ID
+from .branding import APP_ID, LEGACY_APP_IDS
 
 SHORTCUT_FILENAME = f"{APP_ID}.desktop"
+LEGACY_SHORTCUT_FILENAMES = tuple(f"{app_id}.desktop" for app_id in LEGACY_APP_IDS)
 OWNERSHIP_MARKER = "X-NautiBoy-DesktopShortcut=true"
 
 
@@ -60,6 +61,7 @@ class DesktopShortcutManager:
                 stream.write(content)
             temporary.chmod(0o755)
             temporary.replace(destination)
+            self._remove_owned_legacy_shortcuts()
             return destination
         except DesktopShortcutError:
             raise
@@ -74,17 +76,34 @@ class DesktopShortcutManager:
 
     def remove(self) -> bool:
         destination = self.path
-        if not destination.exists():
-            return False
+        removed = False
         try:
-            if OWNERSHIP_MARKER not in destination.read_text(encoding="utf-8"):
-                raise DesktopShortcutError(f"refusing to remove an unowned shortcut: {destination}")
-            destination.unlink()
-            return True
+            if destination.exists():
+                if OWNERSHIP_MARKER not in destination.read_text(encoding="utf-8"):
+                    raise DesktopShortcutError(f"refusing to remove an unowned shortcut: {destination}")
+                destination.unlink()
+                removed = True
+            return self._remove_owned_legacy_shortcuts() or removed
         except DesktopShortcutError:
             raise
         except OSError as error:
             raise DesktopShortcutError(f"cannot remove Desktop shortcut: {error}") from error
+
+    def _remove_owned_legacy_shortcuts(self) -> bool:
+        removed = False
+        directory = desktop_directory()
+        for filename in LEGACY_SHORTCUT_FILENAMES:
+            path = directory / filename
+            if not path.exists():
+                continue
+            try:
+                if OWNERSHIP_MARKER not in path.read_text(encoding="utf-8"):
+                    continue
+                path.unlink()
+                removed = True
+            except OSError as error:
+                raise DesktopShortcutError(f"cannot remove legacy Desktop shortcut: {error}") from error
+        return removed
 
 
 def is_executable_by_user(path: Path) -> bool:

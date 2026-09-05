@@ -30,7 +30,9 @@ def test_default_schema_has_approved_independent_settings() -> None:
     state = default_profile_state()
     assert state.profile("thermals").settings == {}
     assert state.profile("image").settings == {"resize_strategy": "fit"}
-    assert state.profile("gif").settings == {"resize_strategy": "fit"}
+    assert state.profile("gif").settings == {
+        "resize_strategy": "fit", "selected_giphy_slot": None
+    }
     creative = state.profile("creative").settings
     assert creative["active_preset_id"] == "preset_1"
     assert [preset["id"] for preset in creative["presets"]] == list(CREATIVE_PRESET_IDS)
@@ -39,7 +41,8 @@ def test_default_schema_has_approved_independent_settings() -> None:
     ]
     for preset in creative["presets"]:
         assert preset["background"] == {
-            "media_kind": None, "source_path": None, "resize_strategy": "fit"
+            "media_kind": None, "source_path": None, "resize_strategy": "fit",
+            "selected_giphy_slot": None,
         }
         assert preset["orbit_overlay"]["enabled"] is False
         assert preset["telemetry_overlay"] == {
@@ -142,7 +145,9 @@ def test_malformed_individual_profile_recovers_only_that_profile() -> None:
     document["profiles"][2]["type"] = "broken"
     state = profile_state_from_dict(document)
     assert state.profile("image").settings == {"resize_strategy": "center-crop", "future": 1}
-    assert state.profile("gif").settings == {"resize_strategy": "fit"}
+    assert state.profile("gif").settings == {
+        "resize_strategy": "fit", "selected_giphy_slot": None
+    }
 
 
 def test_invalid_active_profile_recovers_to_image() -> None:
