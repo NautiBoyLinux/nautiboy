@@ -18,9 +18,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/NautiBoyLinux/nautiboy"
+Homepage = "https://nautiboy.dev"
 Repository = "https://github.com/NautiBoyLinux/nautiboy"
 Issues = "https://github.com/NautiBoyLinux/nautiboy/issues"
+Support = "mailto:support@nautiboy.dev"
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10"]

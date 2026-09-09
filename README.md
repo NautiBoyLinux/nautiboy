@@ -139,6 +139,10 @@ open USB or hidraw device nodes and cannot send feature reports, frames, or othe
 hardware commands. Serial numbers are replaced by a new non-reversible hash for
 each report. The report is never uploaded automatically.
 
+If hardware is unsupported or identified incorrectly, review the saved ZIP and
+send it yourself to **hardware@nautiboy.dev**. NautiBoy never uploads or emails
+reports automatically.
+
 ## Uninstall and user data
 
 Quit NautiBoy first, then remove the RPM:
@@ -196,4 +200,7 @@ licensed separately under CC BY-SA 4.0; see [ARTWORK-LICENSE.txt](ARTWORK-LICENS
 The protocol work was informed by the GPLv3 OpenLinkHub project; see
 [ATTRIBUTION.md](ATTRIBUTION.md).
 
-Report bugs through [GitHub Issues](https://github.com/NautiBoyLinux/nautiboy/issues).
+Visit [nautiboy.dev](https://nautiboy.dev) for the official project site.
+Report bugs through [GitHub Issues](https://github.com/NautiBoyLinux/nautiboy/issues),
+use **support@nautiboy.dev** for general support, or use
+**hardware@nautiboy.dev** for compatibility work and reviewed Hardware Reports.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from PySide6.QtWidgets import QLabel
+
 from nautiboy.gui.hardware_report_dialog import HardwareReportDialog, complete_preview
 from nautiboy.support_report.models import ReportSnapshot
 
@@ -21,6 +23,9 @@ def test_dialog_shows_complete_payload_before_save(qt_application) -> None:
         assert "Hardware Report" in preview
         assert "Structured JSON included" in preview
         assert '"automatic_upload": false' in preview
+        labels = " ".join(label.text() for label in dialog.findChildren(QLabel))
+        assert "hardware@nautiboy.dev" in labels
+        assert "never sends it for you" in labels
         assert written == []
     finally:
         dialog.close()

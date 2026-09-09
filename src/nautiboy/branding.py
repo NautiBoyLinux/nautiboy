@@ -12,6 +12,9 @@ ORGANIZATION_DOMAIN = "io.github.nautiboylinux"
 LEGACY_APP_IDS = ("io.github.nautiboy.nautiboy",)
 PROJECT_URL = "https://github.com/NautiBoyLinux/nautiboy"
 ISSUES_URL = f"{PROJECT_URL}/issues"
+WEBSITE_URL = "https://nautiboy.dev"
+SUPPORT_EMAIL = "support@nautiboy.dev"
+HARDWARE_SUPPORT_EMAIL = "hardware@nautiboy.dev"
 APP_DESCRIPTION = "NautiBoy is an open-source Linux controller for Corsair NAUTILUS RS LCD displays."
 DISCLAIMER = (
     "NautiBoy is an unofficial community project and is not affiliated with, "

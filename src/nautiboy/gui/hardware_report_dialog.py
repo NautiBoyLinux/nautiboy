@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from nautiboy.branding import HARDWARE_SUPPORT_EMAIL
 from nautiboy.support_report import (
     ReportSnapshot, collect_hardware_report, render_human_report, write_support_bundle,
 )
@@ -44,6 +45,12 @@ class HardwareReportDialog(QDialog):
         )
         notice.setWordWrap(True)
         layout.addWidget(notice)
+        submission_note = QLabel(
+            "If your hardware is unsupported or not detected correctly, save and review the ZIP, "
+            f"then email it yourself to {HARDWARE_SUPPORT_EMAIL}. NautiBoy never sends it for you."
+        )
+        submission_note.setWordWrap(True)
+        layout.addWidget(submission_note)
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
         self.preview.setPlainText(complete_preview(self.snapshot))

@@ -19,3 +19,6 @@
   reads sysfs and host metadata only. It never opens a USB/hidraw node, imports a
   control backend, or invokes an ioctl. Reports are previewed before a user-chosen
   local save and are never uploaded automatically.
+- A tester may manually email a reviewed Hardware Report ZIP to
+  `hardware@nautiboy.dev`. NautiBoy never uploads or emails it, and report
+  generation performs no network activity.

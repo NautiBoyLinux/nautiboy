@@ -16,7 +16,7 @@
     <p>Hardware validation is limited to CORSAIR Nautilus LCD Cap 1b1c:0c57, interface 0, firmware 0.3.0.5, on Fedora KDE Plasma 44.</p>
     <p>NautiBoy is an unofficial community project and is not affiliated with, endorsed by, or supported by Corsair.</p>
   </description>
-  <url type="homepage">https://github.com/NautiBoyLinux/nautiboy</url>
+  <url type="homepage">https://nautiboy.dev</url>
   <url type="vcs-browser">https://github.com/NautiBoyLinux/nautiboy</url>
   <url type="bugtracker">https://github.com/NautiBoyLinux/nautiboy/issues</url>
   <launchable type="desktop-id">io.github.nautiboylinux.nautiboy.desktop</launchable>

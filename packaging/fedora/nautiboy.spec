@@ -4,8 +4,8 @@ Release:        1%{?dist}
 Summary:        Linux controller for Corsair NAUTILUS RS LCD displays
 
 License:        GPL-3.0-or-later AND CC-BY-SA-4.0
-URL:            https://github.com/NautiBoyLinux/nautiboy
-Source0:        %{url}/archive/v0.4.0-beta.1/%{name}-v0.4.0-beta.1.tar.gz
+URL:            https://nautiboy.dev
+Source0:        https://github.com/NautiBoyLinux/nautiboy/archive/v0.4.0-beta.1/%{name}-v0.4.0-beta.1.tar.gz
 
 BuildArch:      noarch
 BuildRequires:  python3-devel

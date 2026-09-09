@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from nautiboy.autostart import AutostartError, AutostartManager, UserPreferences
+from nautiboy.branding import HARDWARE_SUPPORT_EMAIL
 from nautiboy.credentials import CredentialError, GiphyCredentialStore
 
 from .hardware_report_dialog import HardwareReportDialog
@@ -84,7 +85,8 @@ class PreferencesDialog(QDialog):
         hardware_report_layout = QVBoxLayout(hardware_report)
         report_note = QLabel(
             "Generate a read-only USB/HID inventory. You can review every included field before "
-            "saving a local ZIP; nothing is uploaded automatically."
+            "saving a local ZIP; nothing is uploaded automatically. Unsupported-hardware reports "
+            f"may be emailed manually to {HARDWARE_SUPPORT_EMAIL}."
         )
         report_note.setWordWrap(True)
         self.hardware_report_button = QPushButton("Generate Hardware Report")
