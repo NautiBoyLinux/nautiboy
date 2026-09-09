@@ -20,8 +20,9 @@ The deliberately narrow supported and physically tested configuration is:
 |---|---|---:|---|---|
 | CORSAIR Nautilus LCD Cap | `1b1c:0c57` | 0 | `0.3.0.5` | Fedora KDE Plasma 44 |
 
-Other distributions, firmware versions, and Corsair LCD products are currently unverified.
-NautiBoy will not accept a different VID, PID, or USB interface.
+Other distributions, firmware versions, and LCD products are currently unverified
+for control. NautiBoy's read-only hardware catalog can recognize additional
+research candidates, but it will not authorize control from a VID:PID match.
 
 ## Features
 
@@ -40,6 +41,8 @@ NautiBoy will not accept a different VID, PID, or USB interface.
   snapshot rather than a newer unsent selection
 - Manual restore and safe quit-time restoration of stored hardware/iCUE content
 - Normal-user device access through one narrowly scoped udev rule
+- Preview-first, local-only Hardware Report ZIP generation for tester USB/HID
+  identification; serial numbers are hashed and nothing is uploaded automatically
 
 ## Install on Fedora
 
@@ -123,6 +126,18 @@ nautiboy --remove-desktop-shortcut
   touching the LCD.
 - **Return to stored iCUE content:** choose **Restore Hardware Mode** or quit
   NautiBoy through its tray action.
+
+## Hardware reports for testers
+
+Open **Settings → Generate Hardware Report** to create a read-only support
+bundle without terminal commands. NautiBoy first displays the complete text and
+JSON contents for review. If you choose Save, it creates one local ZIP containing
+`hardware-report.txt` and `hardware-report.json`.
+
+The collector reads Linux sysfs and operating-system metadata only. It does not
+open USB or hidraw device nodes and cannot send feature reports, frames, or other
+hardware commands. Serial numbers are replaced by a new non-reversible hash for
+each report. The report is never uploaded automatically.
 
 ## Uninstall and user data
 

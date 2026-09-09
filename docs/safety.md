@@ -15,3 +15,7 @@
 - Normal exit restores hardware mode only after this session sent an image.
 - No persistent storage, firmware flashing, cooling, pump, fan, RGB, brightness,
   frame-rate, or rotation operation exists in the codebase.
+- Hardware support reports are produced by a separate passive collector that
+  reads sysfs and host metadata only. It never opens a USB/hidraw node, imports a
+  control backend, or invokes an ioctl. Reports are previewed before a user-chosen
+  local save and are never uploaded automatically.

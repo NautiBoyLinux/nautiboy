@@ -10,8 +10,10 @@ from PySide6.QtWidgets import (
 from nautiboy.autostart import AutostartError, AutostartManager, UserPreferences
 from nautiboy.credentials import CredentialError, GiphyCredentialStore
 
+from .hardware_report_dialog import HardwareReportDialog
+
 PREFERENCES_MINIMUM_WIDTH = 420
-PREFERENCES_MINIMUM_HEIGHT = 500
+PREFERENCES_MINIMUM_HEIGHT = 650
 
 
 class PreferencesDialog(QDialog):
@@ -78,13 +80,28 @@ class PreferencesDialog(QDialog):
         giphy_layout.addWidget(self.giphy_key)
         giphy_layout.addLayout(actions)
         layout.addWidget(giphy)
+        hardware_report = QGroupBox("Tester support")
+        hardware_report_layout = QVBoxLayout(hardware_report)
+        report_note = QLabel(
+            "Generate a read-only USB/HID inventory. You can review every included field before "
+            "saving a local ZIP; nothing is uploaded automatically."
+        )
+        report_note.setWordWrap(True)
+        self.hardware_report_button = QPushButton("Generate Hardware Report")
+        hardware_report_layout.addWidget(report_note)
+        hardware_report_layout.addWidget(self.hardware_report_button)
+        layout.addWidget(hardware_report)
         self.save_giphy_key.clicked.connect(self._save_giphy_key)
         self.remove_giphy_key.clicked.connect(self._remove_giphy_key)
+        self.hardware_report_button.clicked.connect(self._open_hardware_report)
         self._refresh_giphy_status()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _open_hardware_report(self) -> None:
+        HardwareReportDialog(self).exec()
 
     def _refresh_giphy_status(self) -> None:
         try:

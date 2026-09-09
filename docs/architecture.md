@@ -27,6 +27,9 @@
 12. `gui` presents state and uses timers with in-flight guards. The
    timer only queues work; every USB operation runs in `DeviceWorker` on its
    dedicated `QThread`.
+13. `support_report` is a passive sysfs/host-metadata inventory. It has no
+   dependency on `backends`, never opens device nodes, hashes unique identifiers,
+   and writes only an explicitly previewed user-selected local ZIP.
 
 The direct backend is intentionally small. A future OpenLinkHub adapter can
 implement the same `NautilusBackend` protocol, but NautiBoy does not start,
