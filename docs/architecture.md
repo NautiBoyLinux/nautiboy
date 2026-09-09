@@ -2,26 +2,29 @@
 
 ## Layers
 
-1. `device` reads udev/sysfs identity and reports hotplug changes. It never opens
+1. `hardware` is the shared, write-neutral LCD/AIO knowledge layer. It records
+   evidence, recognition constraints, capabilities, and native-adapter readiness;
+   recognition never authorizes a hardware write.
+2. `device` reads udev/sysfs identity and reports hotplug changes. It never opens
    a device node.
-2. `protocol` constructs and validates byte sequences without filesystem or Qt
+3. `protocol` constructs and validates byte sequences without filesystem or Qt
    dependencies.
-3. `imaging` decodes JPEG/PNG input and returns a bounded 480×480 baseline JPEG.
-4. `gif` validates GIFs, renders one composed frame at a time through the same
+4. `imaging` decodes JPEG/PNG input and returns a bounded 480×480 baseline JPEG.
+5. `gif` validates GIFs, renders one composed frame at a time through the same
    image pipeline, and schedules LCD frames without a backlog.
-5. `profiles` models four versioned functional modes and persists their UI-only
+6. `profiles` models four versioned functional modes and persists their UI-only
    state in an atomic per-user XDG JSON document.
-6. `telemetry` discovers and samples normalized read-only Linux sensors. It is
+7. `telemetry` discovers and samples normalized read-only Linux sensors. It is
    independent of Qt, HID, media, rendering, and profile persistence.
-7. `providers` exposes provider-neutral results. The experimental GIPHY adapter
+8. `providers` exposes provider-neutral results. The experimental GIPHY adapter
    is optional and resolves its credential from the process environment or
    desktop keyring.
-8. `network` performs bounded, cancellable Qt Network requests in a separate
+9. `network` performs bounded, cancellable Qt Network requests in a separate
    thread.
-9. `backends` owns direct hidraw access and revalidates device identity before
+10. `backends` owns direct hidraw access and revalidates device identity before
    every open.
-10. `application` and `models` define state-dependent control policy.
-11. `gui` presents state and uses timers with in-flight guards. The
+11. `application` and `models` define state-dependent control policy.
+12. `gui` presents state and uses timers with in-flight guards. The
    timer only queues work; every USB operation runs in `DeviceWorker` on its
    dedicated `QThread`.
 
