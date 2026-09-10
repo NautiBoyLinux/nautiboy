@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtGui import QMovie
+from PySide6.QtWidgets import QLabel
 import io
 
 from nautiboy.branding import (
@@ -15,6 +16,9 @@ from nautiboy.branding import (
     application_icon,
     application_icon_paths,
     asset_path,
+    HARDWARE_SUPPORT_EMAIL,
+    SUPPORT_EMAIL,
+    WEBSITE_URL,
 )
 from nautiboy.gui import main_window
 from nautiboy.gui.theme import STYLESHEET
@@ -39,6 +43,9 @@ def test_public_brand_identity() -> None:
     )
     assert "unofficial community project" in DISCLAIMER
     assert "not affiliated with, endorsed by, or supported by Corsair" in DISCLAIMER
+    assert WEBSITE_URL == "https://nautiboy.dev"
+    assert SUPPORT_EMAIL == "support@nautiboy.dev"
+    assert HARDWARE_SUPPORT_EMAIL == "hardware@nautiboy.dev"
 
 
 def test_theme_is_separate_and_contains_semantic_states() -> None:
@@ -115,6 +122,8 @@ def test_disconnected_window_keeps_controls_safe(monkeypatch) -> None:
     window = main_window.MainWindow()
     try:
         assert window.windowTitle() == APP_NAME
+        subtitles = [label.text() for label in window.findChildren(QLabel)]
+        assert "NAUTILUS LCD CONTROLLER  •  BETA 0.4.0b1" in subtitles
         assert window.state_label.text() == "DISCONNECTED"
         assert not window.details_card.isVisible()
         assert window.select_button.isEnabled() is False

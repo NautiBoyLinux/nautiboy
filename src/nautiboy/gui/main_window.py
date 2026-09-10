@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from nautiboy import __version__
 from nautiboy.application import control_policy, state_after_image_error
 from nautiboy.autostart import UserPreferences
 from nautiboy.branding import APP_NAME, DISCLAIMER, application_icon
@@ -249,7 +250,7 @@ class MainWindow(QMainWindow):
         title_row.addWidget(title)
         title_row.addWidget(accent)
         title_row.addStretch()
-        subtitle = QLabel("NAUTILUS LCD CONTROLLER")
+        subtitle = QLabel(f"NAUTILUS LCD CONTROLLER  •  BETA {__version__}")
         subtitle.setObjectName("subtitle")
         brand.addLayout(title_row)
         brand.addWidget(subtitle)

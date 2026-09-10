@@ -9,6 +9,7 @@
     <name>Andrew Tyler</name>
   </developer>
   <description>
+    <p>NautiBoy is beta software intended for testing on explicitly supported hardware.</p>
     <p>NautiBoy is an unofficial Linux controller for the hardware-tested Corsair Nautilus LCD Cap.</p>
     <p>Choose among Thermals, Image, GIF, and Creative modes. Display local JPEG, PNG, and animated GIF media; monitor up to two Linux temperature sensors with the animated Orbit design; or combine media, Orbit, and telemetry in four persistent Creative presets.</p>
     <p>NautiBoy can run in the system tray, start with the desktop session, optionally resume the last successfully sent display, and safely restore the controller's stored hardware-mode content.</p>

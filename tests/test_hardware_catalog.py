@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from nautiboy.hardware.catalog import HARDWARE_CATALOG, identities_for_usb, identify_usb
+from nautiboy.hardware.compatibility import render_hardware_compatibility
 from nautiboy.hardware.models import Confidence, ControlSupport
 
 
@@ -64,3 +67,14 @@ def test_requested_seed_identities_are_present() -> None:
         (0x0DB0, 0xB130), (0x391A, 0x1021), (0x18D1, 0x2D03),
     }
     assert expected <= {record.key for record in HARDWARE_CATALOG}
+
+
+def test_public_compatibility_document_is_generated_from_catalog() -> None:
+    root = Path(__file__).resolve().parents[1]
+    document = root / "docs/hardware-compatibility.md"
+    assert document.read_text(encoding="utf-8") == render_hardware_compatibility()
+    rendered = render_hardware_compatibility()
+    assert "Identification does not imply control" in rendered
+    assert "hardware@nautiboy.dev" in rendered
+    for record in HARDWARE_CATALOG:
+        assert f"`{record.vid:04x}:{record.pid:04x}`" in rendered

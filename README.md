@@ -12,6 +12,10 @@ restored on request and during a safe application shutdown.
 
 NautiBoy is not affiliated with, endorsed by, or supported by Corsair.
 
+> **Beta/testing software:** `v0.4.0-beta.1` is intended for careful external
+> testing on explicitly supported hardware. Review the safety and compatibility
+> notes before use.
+
 ## Hardware support
 
 The deliberately narrow supported and physically tested configuration is:
@@ -20,9 +24,18 @@ The deliberately narrow supported and physically tested configuration is:
 |---|---|---:|---|---|
 | CORSAIR Nautilus LCD Cap | `1b1c:0c57` | 0 | `0.3.0.5` | Fedora KDE Plasma 44 |
 
-Other distributions, firmware versions, and LCD products are currently unverified
-for control. NautiBoy's read-only hardware catalog can recognize additional
-research candidates, but it will not authorize control from a VID:PID match.
+Other distributions and firmware versions are currently unverified for control.
+NautiBoy's read-only catalog recognizes additional hardware without enabling it:
+
+- **Protocol known but unimplemented:** Corsair Nautilus `0c55`; NZXT Kraken
+  Z/2023/2024 LCD families; Lian Li Galahad II LCD; MSI MPG Coreliquid K360;
+  TRYX Panorama SE/PASE; and two researched Thermalright display families.
+- **Identification only:** Corsair Elite Capellix/iCUE LINK candidates; ASUS
+  Ryujin/Ryuo displays; and the legacy TRYX Panorama interface.
+
+See the generated [hardware compatibility status](docs/hardware-compatibility.md)
+for exact IDs, confidence, and notes. **Identification does not imply control
+support and never authorizes hardware writes.**
 
 ## Features
 
@@ -46,8 +59,9 @@ research candidates, but it will not authorize control from a VID:PID match.
 
 ## Install on Fedora
 
-Download the release RPM for `v0.4.0-beta.1`, verify its published checksum,
-then install it from a normal terminal:
+Download the RPM and `SHA256SUMS` from the
+[`v0.4.0-beta.1` GitHub release](https://github.com/NautiBoyLinux/nautiboy/releases/tag/v0.4.0-beta.1),
+verify the published checksum, then install it from a normal terminal:
 
 ```bash
 sudo dnf install ./nautiboy-0.4.0~beta.1-1.fc44.noarch.rpm
@@ -56,6 +70,9 @@ sudo dnf install ./nautiboy-0.4.0~beta.1-1.fc44.noarch.rpm
 Reconnect the Nautilus LCD USB connection, log out and back in, or reboot so
 udev and the desktop session can apply normal-user access. Launch **NautiBoy**
 from the application menu. Do not run the GUI with `sudo`.
+
+See the [external beta tester guide](docs/tester-guide.md) for the complete
+install, launch, report-submission, and uninstall workflow.
 
 The RPM installs the application, desktop/AppStream metadata, hicolor icons,
 and this exact rule:
@@ -176,7 +193,9 @@ Preferences before uninstalling.
 
 See the [architecture](docs/architecture.md), [safety model](docs/safety.md),
 [protocol subset](docs/protocol.md), [hardware validation](docs/HARDWARE-VALIDATION.md),
-and [beta release notes](docs/release-notes-v0.4.0-beta.1.md).
+[compatibility status](docs/hardware-compatibility.md),
+[tester guide](docs/tester-guide.md), and
+[beta release notes](docs/release-notes-v0.4.0-beta.1.md).
 
 ## Screenshots
 
