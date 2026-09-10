@@ -40,7 +40,9 @@ pump, fan, or RGB controls. Those operations are not part of this beta.
 
 If hardware is unsupported, unknown, or detected incorrectly:
 
-1. Open **Settings → Generate Hardware Report**.
+1. Click **CHECK MY HARDWARE** in the main window. This remains available when
+   NautiBoy finds no device or recognizes hardware it cannot control. The same
+   workflow is also available under **Settings → Generate Hardware Report**.
 2. Review all displayed text and structured JSON before saving.
 3. Save the ZIP locally.
 4. Email the ZIP yourself to **hardware@nautiboy.dev**, including the marketed

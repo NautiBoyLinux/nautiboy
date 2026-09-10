@@ -146,7 +146,8 @@ nautiboy --remove-desktop-shortcut
 
 ## Hardware reports for testers
 
-Open **Settings → Generate Hardware Report** to create a read-only support
+Click **CHECK MY HARDWARE** in the main window (available even when no supported
+device is detected), or use **Settings → Generate Hardware Report**, to create a read-only support
 bundle without terminal commands. NautiBoy first displays the complete text and
 JSON contents for review. If you choose Save, it creates one local ZIP containing
 `hardware-report.txt` and `hardware-report.json`.

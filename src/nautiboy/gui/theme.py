@@ -150,6 +150,18 @@ QPushButton#detailsButton {
     border: 1px solid #2a3047;
     border-radius: 9px;
 }
+QPushButton#hardwareScanButton {
+    min-height: 38px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #f5edff;
+    border: 1px solid #8b3dff;
+    background: #211535;
+}
+QPushButton#hardwareScanButton:hover {
+    background: #352052;
+    border-color: #a969ff;
+}
 QComboBox::drop-down {
     border: none;
     width: 30px;

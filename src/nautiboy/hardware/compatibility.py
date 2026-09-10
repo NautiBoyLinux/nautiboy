@@ -66,8 +66,9 @@ def render_hardware_compatibility() -> str:
     lines.extend([
         "## Help expand compatibility",
         "",
-        "If a device is unsupported, unknown, or detected incorrectly, open **Settings → Generate",
-        "Hardware Report**. Review the complete text and JSON preview, save the ZIP locally, and",
+        "If a device is unsupported, unknown, or detected incorrectly, click **CHECK MY HARDWARE**",
+        "in the main window (or open **Settings → Generate Hardware Report**). Review the complete",
+        "text and JSON preview, save the ZIP locally, and",
         "email it yourself to **hardware@nautiboy.dev** with the device's marketed model name.",
         "NautiBoy never uploads or emails reports automatically and report generation performs no",
         "network activity or hardware writes.",

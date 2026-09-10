@@ -80,6 +80,7 @@ from nautiboy.selected_media import (
 )
 
 from .gif_search_dialog import GifSearchDialog
+from .hardware_report_dialog import HardwareReportDialog
 from .orbit import ORBIT_PREVIEW_INTERVAL_MS, OrbitPlaybackController
 from .preferences_dialog import PreferencesDialog
 from .refresh import StaticImageRefresher
@@ -264,6 +265,13 @@ class MainWindow(QMainWindow):
         self.details_button.setCheckable(True)
         header_layout.addWidget(self.details_button)
         layout.addWidget(header)
+
+        self.hardware_scan_button = QPushButton("CHECK MY HARDWARE")
+        self.hardware_scan_button.setObjectName("hardwareScanButton")
+        self.hardware_scan_button.setToolTip(
+            "Safely scan USB/HID metadata and preview a private Hardware Report"
+        )
+        layout.addWidget(self.hardware_scan_button)
 
         profile_bar = QFrame()
         profile_bar.setObjectName("profileBar")
@@ -501,6 +509,7 @@ class MainWindow(QMainWindow):
 
         self.select_button.clicked.connect(self._select_image)
         self.settings_button.clicked.connect(self._open_preferences)
+        self.hardware_scan_button.clicked.connect(self._open_hardware_report)
         self.gif_search_button.clicked.connect(self._open_gif_search)
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
         self.send_button.clicked.connect(self._send)
@@ -1339,6 +1348,10 @@ class MainWindow(QMainWindow):
     @Slot()
     def _open_preferences(self) -> None:
         PreferencesDialog(self).exec()
+
+    @Slot()
+    def _open_hardware_report(self) -> None:
+        HardwareReportDialog(self).exec()
 
     @staticmethod
     def _refresh_widget_style(widget: QWidget) -> None:
